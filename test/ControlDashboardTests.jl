@@ -2,7 +2,7 @@ using Test
 using Dash
 using ControlDashboard
 
-@testset "set_callbacks tests" begin
+@testset "ControlDashboard tests" begin
 
     # --- 1. Setup Mock Environment ---
 

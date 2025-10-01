@@ -122,7 +122,7 @@ Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
 function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_duration=50)
 
-    @assert all(name -> hasproperty(df, name), (:time, :roll, :pitch, :yaw)) "DataFrame must contain :time, :roll, :pitch, :yaw"
+    @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
 
     frames = PlotlyFrame[]
 
@@ -149,14 +149,9 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
     end
 
     # initial frame
-    initial_traces = frames[1].data
+    initial_trace = frames[1].data
 
     layout = Layout(
-        scene=attr(
-            xaxis=attr(range=[-2, 2]),
-            yaxis=attr(range=[-2, 2]),
-            zaxis=attr(range=[-2, 2])
-        ),
         updatemenus=[attr(
             type="buttons",
             showactive=false,
@@ -169,7 +164,7 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
         template=template,
     )
 
-    return Plot(initial_traces, layout, frames)
+    return Plot(initial_trace, layout, frames)
 end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
