@@ -22,13 +22,13 @@ end
     attitude_dynamics!(du, u, p, t)
 
 Rigid-body rotational dynamics for a quadcopter.
-- u = [φ, θ, ψ, p, q, r] → roll, pitch, yaw, angular rates
+- u = [φ, θ, ψ, p, q, r] → roll, pitch, yaw and angular rates
 - du = derivative
 - p = Dict("torques" => [τx, τy, τz])
 """
 function attitude_dynamics!(du, u, p, _t)
     φ, θ, _ψ, p_rate, q_rate, r_rate = u
-    τ = get(p, "torques", zeros(3))  # control torques [τx, τy, τz]
+    τ = zeros(3)
 
     # Euler angles rates
     du[1] = p_rate + q_rate * sin(φ) * tan(θ) + r_rate * cos(φ) * tan(θ)
@@ -58,8 +58,7 @@ function quadcopter_simulation(state; t_final=5.0, dt=0.01)
     ]
 
     tspan = (0.0, t_final)
-    torques = zeros(3)  # simple step input can be added here
-    prob = ODEProblem(attitude_dynamics!, u0, tspan, Dict("torques" => torques))
+    prob = ODEProblem(attitude_dynamics!, u0, tspan)
     sol = solve(prob, Tsit5(), dt=dt)  # Tsit5 = 5th order Runge-Kutta
 
     return DataFrame(
@@ -173,21 +172,69 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
     return Plot(initial_traces, layout, frames)
 end
 
-# --- Dashboard interfaces ---
-quadcopter_interfaces = [
-    html_label("Initial Roll (deg)"),
-    dcc_slider(id="roll", min=-30.0, max=30.0, step=1.0, value=0.0, marks=Dict(i=>string(i) for i in -30:10:30)),
+# returns a Vector of components (same shape as your original quadcopter_interfaces)
+function quadcopter_interfaces()
+    row_style = Dict(
+        "display" => "flex",
+        "alignItems" => "center",
+        "gap" => "10px",
+        "marginBottom" => "8px"
+    )
 
-    html_label("Initial Pitch (deg)"),
-    dcc_slider(id="pitch", min=-30.0, max=30.0, step=1.0, value=0.0, marks=Dict(i=>string(i) for i in -30:10:30)),
+    label_style = Dict("width" => "160px", "marginRight" => "6px")
+    input_style = Dict("width" => "140px")
 
-    html_label("Initial Yaw (deg)"),
-    dcc_slider(id="yaw", min=-180.0, max=180.0, step=5.0, value=0.0, marks=Dict(i=>string(i) for i in -180:90:180)),
-]
+    return [
+        html_div([
+            html_label("Initial Roll (deg)", style=label_style),
+            dcc_input(
+                id="roll",
+                type="number",
+                value=0.0,
+                step=0.1,
+                min=-30.0,
+                max=30.0,
+                debounce=true,         # value is sent only after user stops typing
+                inputMode="numeric",   # nicer on mobile
+                style=input_style
+            )
+        ], style=row_style),
+
+        html_div([
+            html_label("Initial Pitch (deg)", style=label_style),
+            dcc_input(
+                id="pitch",
+                type="number",
+                value=0.0,
+                step=0.1,
+                min=-30.0,
+                max=30.0,
+                debounce=true,
+                inputMode="numeric",
+                style=input_style
+            )
+        ], style=row_style),
+
+        html_div([
+            html_label("Initial Yaw (deg)", style=label_style),
+            dcc_input(
+                id="yaw",
+                type="number",
+                value=0.0,
+                step=0.1,
+                min=-180.0,
+                max=180.0,
+                debounce=true,
+                inputMode="numeric",
+                style=input_style
+            )
+        ], style=row_style)
+    ]
+end
 
 # --- Main execution ---
 function main()
-    app = initialize_dashboard("Quadcopter Attitude Controller"; interfaces=quadcopter_interfaces)
+    app = initialize_dashboard("Quadcopter Attitude Controller"; interfaces=quadcopter_interfaces())
     app = set_callbacks(
         app,
         initial_state,
