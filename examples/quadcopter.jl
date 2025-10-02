@@ -57,7 +57,9 @@ function quadcopter_simulation(state; t_final=5.0, dt=0.01)
         state["roll"],
         state["pitch"],
         state["yaw"],
-        0.0, 0.0, 0.0  # initial angular rates
+        state["p"],
+        state["q"],
+        state["r"],
     ]
 
     tspan = (0.0, t_final)
@@ -68,7 +70,10 @@ function quadcopter_simulation(state; t_final=5.0, dt=0.01)
         time = sol.t,
         roll = sol[1,:],
         pitch = sol[2,:],
-        yaw = sol[3,:]
+        yaw = sol[3,:],
+        p = sol[4,:],
+        q = sol[5,:],
+        r = sol[6,:],
     )
 end
 
@@ -195,7 +200,7 @@ function main()
         initial_state,
         quadcopter_simulation,
         Dict("main_view" => animate_quadcopter),
-        ["roll", "pitch", "yaw"]
+        ["roll", "pitch", "yaw", "p", "q", "r"]
     )
     run_server(app, "127.0.0.1", 8050)
 end
