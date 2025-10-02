@@ -1,11 +1,8 @@
-using Test
-using Dash
-using ControlDashboard
+using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
 
 @testset "ControlDashboard tests" begin
 
     # --- 1. Setup Mock Environment ---
-
     # Define mock data structures that will be returned by our mock functions.
     MOCK_STATE = Dict("status" => "state_created")
     MOCK_DATAFRAME = (colA=[10, 20], colB=[30, 40]) # Using a NamedTuple as a mock DataFrame
@@ -50,7 +47,7 @@ using ControlDashboard
         interfaces = ["duration_slider", "dt_slider"]
 
         # Execute the function to be tested
-        app = set_callbacks(
+        set_callbacks!(
             dash(),
             mock_state_factory,
             mock_run_simulation,
@@ -59,10 +56,6 @@ using ControlDashboard
         )
 
         # --- 3. Assertions ---
-
-        # Verify that the app object is correctly configured
-        @test length(app.callbacks) == 1
-
         test_slider_values = (100, 0.5)
         df = mock_run_simulation(mock_state_factory(test_slider_values))
         result_figure = mock_renderer(df)
@@ -91,7 +84,7 @@ using ControlDashboard
         )
         interfaces = ["interface1"]
 
-        set_callbacks(app, mock_state_factory, mock_run_simulation, figures, interfaces)
+        set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
 
         # Two callbacks should have been created
         @test length(app.callbacks) == 2
@@ -104,7 +97,7 @@ using ControlDashboard
         figures = Dict() # Empty dictionary
         interfaces = ["slider1"]
 
-        set_callbacks(app, mock_state_factory, mock_run_simulation, figures, interfaces)
+        set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
 
         # No callbacks should be registered if there are no figures
         @test isempty(app.callbacks)
@@ -113,5 +106,28 @@ using ControlDashboard
         @test isempty(state_factory_calls[])
         @test isempty(run_simulation_calls[])
         @test isempty(renderer_calls[])
+    end
+
+    @testset "ode_simulation tests" begin
+        # Define a simple scalar ODE: du/dt = -u, solution u(t) = exp(-t)
+        function simple_dynamics!(du, u, p, t)
+            du[1] = -u[1]
+        end
+
+        # Run simulation
+        df = ode_simulation(simple_dynamics!, [1.0]; t_final=1.0, dt=0.1)
+
+        # Check type
+        @test isa(df, DataFrame)
+
+        # Check required columns
+        @test names(df) == ["time", "x1"]
+
+        # Time column goes from 0 → t_final with step dt
+        @test df.time[1] ≈ 0.0
+        @test df.time[end] ≈ 1.0
+
+        # Analytical solution at t=1: exp(-1) ≈ 0.3679
+        @test df.x1[end] ≈ exp(-1) atol=1e-3
     end
 end

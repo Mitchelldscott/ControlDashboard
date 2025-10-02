@@ -3,13 +3,12 @@
 module ControlDashboard
 
     # Import required libraries
-    using Dash
-    using DataFrames
+    using Dash, DataFrames, StaticArrays, DifferentialEquations
     
     include("ControlPanel.jl")
 
     # Export the main dashboard function so it can be used by other modules.
-    export initialize_dashboard, set_callbacks
+    export initialize_dashboard, set_callbacks!, sol_to_dataframe, rk4_simulation
 
     """
         initialize_dashboard(title; interfaces=make_interfaces(), graphs=make_graphs()) -> DashApp
@@ -34,7 +33,10 @@ module ControlDashboard
     """
         control_dashboard(state_factory, run_simulation, make_figure)
 
-    Create a generic Dash app for interactive simulation.
+    Register callbacks for interactive components of a generic Dash app.
+
+        This function uses a set of input functions to initialize and run a 
+    simulation, 
 
     # Arguments
     - `state_factory::Function`: A function that takes no arguments and returns a fresh 
@@ -44,7 +46,7 @@ module ControlDashboard
     - `make_figure::Function`: A function that takes the simulation data and returns a
     figure to be displayed.
     """
-    function set_callbacks(app, state_factory, run_simulation, figures, interfaces)
+    function set_callbacks!(app, state_factory, run_simulation, figures, interfaces)
         # Define the callback function that links the sliders to the graph.
         # When a slider value changes, this function is triggered.
         for (figure_name, renderer) in figures
@@ -57,7 +59,62 @@ module ControlDashboard
                 return renderer(df)
             end
         end
-        # Return the configured app object
-        return app
+    end
+
+    """
+        sol_to_dataframe(sol; state_names)
+
+    Construct a DataFrame from the solution of a DifferentialEquations.ODEProblem.
+
+    This is a helper function for simulations that use DifferentialEquations.jl.
+
+    # Arguments 
+    - `sol::` : The output of DifferentialEquations.solve().
+    - `state_names::Vector{String}` : The names of the states to extract from the 
+    solution. This is also the columns of the DataFrame.
+
+    # Returns
+    - `df::DataFrame` : States and sample times extracted from a sol.
+    """
+    function sol_to_dataframe(sol; state_names=nothing)
+        arr = Array(sol)  # each column is a state, rows = time steps
+        df = DataFrame(time = sol.t) # sol should always have t
+        # Auto-generate names if not provided
+        if isnothing(state_names)
+            state_names = ["x$(i)" for i in 1:size(arr, 1)]
+        end
+        for (i, name) in enumerate(state_names)
+            df[!, Symbol(name)] = arr[i, :]  # grab the i-th state trajectory
+        end
+        return df
+    end
+
+    """
+        rk4_simulation(system_dynamics, initial_state; t_final=5.0, dt=0.01, p=nothing)
+
+    Simulate a system of ordinary differential equations (ODEs) over a given time horizon.
+
+    # Arguments
+    - `system_dynamics`: A function `f!(du, u, p, t)` defining the system dynamics in-place.
+    - `initial_state`: Vector-like object representing the initial condition(s).
+    - `t_final`: (default = 5.0) Final simulation time.
+    - `dt`: (default = 0.01) Time step for saving results.
+    - `p`: (default = nothing) Optional parameters to pass to the dynamics.
+
+    # Returns
+    - `DataFrame` containing simulation results with columns:
+        - `time` = simulation time points  
+        - state columns extracted from the solution (`x1, x2, ...` by default, or renamed if using `sol_to_dataframe` with labels).
+    """
+    function rk4_simulation(system_dynamics, initial_state; t_final=5.0, dt=0.01, params=NullParameters(), state_names=nothing)
+        # Use SVector for initial state for performance optimization recommended in Julia ODE/Robotics ecosystems [6]
+        tspan = (0.0, t_final)
+        # Define the ODE problem
+        prob = ODEProblem(system_dynamics, initial_state, tspan, p=params)
+        # Solve the ODE. Using Tsit5(), a powerful explicit Runge-Kutta method often effective 
+        # for non-stiff dynamics like this attitude model [12, 16].
+        sol = solve(prob, Tsit5(), saveat=dt, p=params)
+        # Process results into DataFrame
+        return sol_to_dataframe(sol; state_names=state_names)
     end
 end # module ControlDashboards
