@@ -1,6 +1,7 @@
 # --- Example Usage ---
 # The following code demonstrates how to use the module with a simple sine wave simulation.
 using ControlDashboard
+using ControlDashboard.ControlPanel
 using DataFrames
 using Dash
 using PlotlyJS
@@ -37,33 +38,12 @@ function make_timeseries_figure(data::DataFrame)
     )
 end
 
-sin_wave_interfaces = [
-    html_label("Amplitude"),
-    dcc_slider(
-        id = "amplitude", min = 1e-5, max = 10,
-        step = 1, value = 1,
-        marks = Dict([i => string(i) for i in 0:1:10])
-    ),
-    html_label("Frequency"),
-    dcc_slider(
-        id = "frequency", min = 1e-2, max = 10,
-        step = 1e-2, value = 1,
-        marks = Dict([i => string(i) for i in 0:1:10])
-    ),
-    html_label("Phase"),
-    dcc_slider(
-        id = "phase", min = -5, max = 5,
-        step = 1e-1, value = 0,
-        marks = Dict([i => string(i) for i in -5:1:5])
-    ),
-    html_label("Sample time"),
-    dcc_slider(
-        id = "dt", min = 1e-5, max = 10,
-        step = 1e-1, value = 1,
-        marks = Dict([i => string(i) for i in 0:1:10])
-    ),
-]
-
+sin_wave_interfaces = make_panel([
+        Dict("component"=>"slider", "label"=>"Amplitude", "id"=>"amplitude", "min"=>1.0, "max"=>10.0, "step"=>1.0, "value"=>1.0),
+        Dict("component"=>"slider", "label"=>"Frequency", "id"=>"frequency", "min"=>1e-2, "max"=>10.0, "step"=>1e-2, "value"=>1.0),
+        Dict("component"=>"slider", "label"=>"Phase", "id"=>"phase", "min"=>-5.0, "max"=>5.0, "step"=>1e-1, "value"=>0.0),
+        Dict("component"=>"slider", "label"=>"Sample time", "id"=>"dt", "min"=>1e-2, "max"=>1.0, "step"=>1e-2, "value"=>0.1),
+    ])
 
 # --- Main execution block ---
 function main()    
