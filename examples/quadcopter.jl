@@ -1,4 +1,4 @@
-using Dash, DataFrames, PlotlyJS, LinearAlgebra, DifferentialEquations, ControlDashboard
+using Dash, DataFrames, PlotlyJS, LinearAlgebra, DifferentialEquations, ControlDashboard, ControlDashboard.ControlPanel
 
 # Quadcopter inertia (example values)
 const I = Diagonal([0.01, 0.01, 0.02])  # kg·m²
@@ -169,62 +169,65 @@ end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
-    row_style = Dict(
+    return make_panel([
+        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,1)),
+        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,2)),
+        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1,3)),
+        Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,1)),
+        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,2)),
+        Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,3)),
+    ]; shape=(2,3), row_style=Dict(
         "display" => "flex",
         "alignItems" => "center",
         "gap" => "10px",
         "marginBottom" => "8px"
-    )
+    ))
+    # return [
+    #     html_div([
+    #         html_label("Initial Roll (deg)", style=label_style),
+    #         dcc_input(
+    #             id="roll",
+    #             type="number",
+    #             value=0.0,
+    #             step=0.1,
+    #             min=-30.0,
+    #             max=30.0,
+    #             debounce=true,         # value is sent only after user stops typing
+    #             inputMode="numeric",   # nicer on mobile
+    #             style=input_style
+    #         )
+    #     ], style=row_style),
 
-    label_style = Dict("width" => "160px", "marginRight" => "6px")
-    input_style = Dict("width" => "140px")
+    #     html_div([
+    #         html_label("Initial Pitch (deg)", style=label_style),
+    #         dcc_input(
+    #             id="pitch",
+    #             type="number",
+    #             value=0.0,
+    #             step=0.1,
+    #             min=-30.0,
+    #             max=30.0,
+    #             debounce=true,
+    #             inputMode="numeric",
+    #             style=input_style
+    #         )
+    #     ], style=row_style),
 
-    return [
-        html_div([
-            html_label("Initial Roll (deg)", style=label_style),
-            dcc_input(
-                id="roll",
-                type="number",
-                value=0.0,
-                step=0.1,
-                min=-30.0,
-                max=30.0,
-                debounce=true,         # value is sent only after user stops typing
-                inputMode="numeric",   # nicer on mobile
-                style=input_style
-            )
-        ], style=row_style),
-
-        html_div([
-            html_label("Initial Pitch (deg)", style=label_style),
-            dcc_input(
-                id="pitch",
-                type="number",
-                value=0.0,
-                step=0.1,
-                min=-30.0,
-                max=30.0,
-                debounce=true,
-                inputMode="numeric",
-                style=input_style
-            )
-        ], style=row_style),
-
-        html_div([
-            html_label("Initial Yaw (deg)", style=label_style),
-            dcc_input(
-                id="yaw",
-                type="number",
-                value=0.0,
-                step=0.1,
-                min=-180.0,
-                max=180.0,
-                debounce=true,
-                inputMode="numeric",
-                style=input_style
-            )
-        ], style=row_style)
-    ]
+    #     html_div([
+    #         html_label("Initial Yaw (deg)", style=label_style),
+    #         dcc_input(
+    #             id="yaw",
+    #             type="number",
+    #             value=0.0,
+    #             step=0.1,
+    #             min=-180.0,
+    #             max=180.0,
+    #             debounce=true,
+    #             inputMode="numeric",
+    #             style=input_style
+    #         )
+    #     ], style=row_style)
+    # ]
 end
 
 # --- Main execution ---
