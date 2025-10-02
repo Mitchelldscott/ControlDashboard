@@ -70,11 +70,6 @@ using ControlDashboard.ControlPanel
         @test throttle_dropdown_container isa Component
 
         # Test component IDs
-        @info roll_input_container.children[1]
-        @info roll_input_container.children[2]
-        # @info pitch_input_container.children
-        # @info yaw_slider_container.children
-        # @info throttle_dropdown_container.children
         @test roll_input_container.children[2].id == "roll"
         @test pitch_input_container.children[2].id == "pitch"
         @test yaw_slider_container.children[2].id == "yaw"

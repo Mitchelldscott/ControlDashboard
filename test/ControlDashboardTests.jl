@@ -115,7 +115,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         end
 
         # Run simulation
-        df = ode_simulation(simple_dynamics!, [1.0]; t_final=1.0, dt=0.1)
+        df = rk4_simulation(simple_dynamics!, [1.0]; t_final=1.0, dt=0.1)
 
         # Check type
         @test isa(df, DataFrame)

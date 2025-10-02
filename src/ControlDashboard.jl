@@ -106,11 +106,11 @@ module ControlDashboard
         - `time` = simulation time points  
         - state columns extracted from the solution (`x1, x2, ...` by default, or renamed if using `sol_to_dataframe` with labels).
     """
-    function rk4_simulation(system_dynamics, initial_state; t_final=5.0, dt=0.01, params=NullParameters(), state_names=nothing)
+    function rk4_simulation(system_dynamics, initial_state; t_final=5.0, dt=0.01, params=nothing, state_names=nothing)
         # Use SVector for initial state for performance optimization recommended in Julia ODE/Robotics ecosystems [6]
         tspan = (0.0, t_final)
         # Define the ODE problem
-        prob = ODEProblem(system_dynamics, initial_state, tspan, p=params)
+        prob = ODEProblem(system_dynamics, initial_state, tspan)
         # Solve the ODE. Using Tsit5(), a powerful explicit Runge-Kutta method often effective 
         # for non-stiff dynamics like this attitude model [12, 16].
         sol = solve(prob, Tsit5(), saveat=dt, p=params)
