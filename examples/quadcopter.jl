@@ -10,11 +10,14 @@ const invI = inv(I)
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw", "motor_speeds" (array of 4 floats)
 """
-function initial_state((roll, pitch, yaw))
+function initial_state((roll, pitch, yaw, p, q, r))
     return Dict(
         "roll" => roll,
         "pitch" => pitch,
-        "yaw" => yaw
+        "yaw" => yaw,
+        "p" => p,
+        "q" => q,
+        "r" => r,
     )
 end
 
