@@ -182,52 +182,6 @@ function quadcopter_interfaces()
         "gap" => "10px",
         "marginBottom" => "8px"
     ))
-    # return [
-    #     html_div([
-    #         html_label("Initial Roll (deg)", style=label_style),
-    #         dcc_input(
-    #             id="roll",
-    #             type="number",
-    #             value=0.0,
-    #             step=0.1,
-    #             min=-30.0,
-    #             max=30.0,
-    #             debounce=true,         # value is sent only after user stops typing
-    #             inputMode="numeric",   # nicer on mobile
-    #             style=input_style
-    #         )
-    #     ], style=row_style),
-
-    #     html_div([
-    #         html_label("Initial Pitch (deg)", style=label_style),
-    #         dcc_input(
-    #             id="pitch",
-    #             type="number",
-    #             value=0.0,
-    #             step=0.1,
-    #             min=-30.0,
-    #             max=30.0,
-    #             debounce=true,
-    #             inputMode="numeric",
-    #             style=input_style
-    #         )
-    #     ], style=row_style),
-
-    #     html_div([
-    #         html_label("Initial Yaw (deg)", style=label_style),
-    #         dcc_input(
-    #             id="yaw",
-    #             type="number",
-    #             value=0.0,
-    #             step=0.1,
-    #             min=-180.0,
-    #             max=180.0,
-    #             debounce=true,
-    #             inputMode="numeric",
-    #             style=input_style
-    #         )
-    #     ], style=row_style)
-    # ]
 end
 
 # --- Main execution ---
