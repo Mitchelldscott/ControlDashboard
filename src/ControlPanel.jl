@@ -21,7 +21,7 @@ module ControlPanel
                 id=compid,
                 type=get(config,"type","number"),
                 value=get(config,"value",0.0),
-                step=get(config,"step",0.1),
+                step=get(config,"step",1e-5),
                 debounce=get(config,"debounce",true),
                 inputMode=get(config,"inputmode","numeric"),
                 min=get(config,"min",nothing),
@@ -59,7 +59,7 @@ module ControlPanel
         return html_div([
             html_label(label, style=base_label_style),
             component
-        ])
+        ], style=base_row_style)
     end
 
     """
