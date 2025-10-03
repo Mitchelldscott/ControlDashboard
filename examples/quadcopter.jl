@@ -123,6 +123,28 @@ Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_duration=50)
 
     @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
+    colorway = PlotlyJS.templates[template].layout[:colorway]
+    quad_color = colorway[1]
+    prop_color = colorway[2]
+    layout = Layout(
+        template=template,
+        scene=attr(
+            aspectmode="manual",   # don't auto-stretch
+            aspectratio=attr(x=1, y=1, z=1),  # equal scaling
+            xaxis=attr(range=[-3*wing_length, 3*wing_length]),
+            yaxis=attr(range=[-3*wing_length, 3*wing_length]),
+            zaxis=attr(range=[-3*wing_length, 3*wing_length])
+        ),
+        updatemenus=[attr(
+            type="buttons",
+            showactive=false,
+            buttons=[attr(
+                label="Play",
+                method="animate",
+                args=[nothing, attr(frame=attr(duration=frame_duration, redraw=true), fromcurrent=true)]
+            )]
+        )],
+    )
 
     frames = PlotlyFrame[]
 
@@ -141,22 +163,25 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
                     y=motors[2,:], 
                     z=motors[3,:],
                     mode="markers",
-                    marker=attr(size=5, color="blue"),
-                    line=attr(width=2)
+                    marker=attr(size=5),
+                    line=attr(width=2, color=prop_color),
+                    template=template,
                 ),
                 scatter3d(
                     x=[motors[1,1], motors[1,3]],
                     y=[motors[2,1], motors[2,3]],
                     z=[motors[3,1], motors[3,3]],
                     mode="lines",
-                    line=attr(width=3, color="black")
+                    line=attr(width=3, color=quad_color),
+                    template=template,
                 ),
                 scatter3d(
                     x=[motors[1,2], motors[1,4]],
                     y=[motors[2,2], motors[2,4]],
                     z=[motors[3,2], motors[3,4]],
                     mode="lines",
-                    line=attr(width=3, color="black")
+                    line=attr(width=3, color=quad_color),
+                    template=template,
                 )
             ],
             name="frame$i"
@@ -166,69 +191,53 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
     # initial frame
     initial_trace = frames[1].data
 
-    layout = Layout(
-        updatemenus=[attr(
-            type="buttons",
-            showactive=false,
-            buttons=[attr(
-                label="Play",
-                method="animate",
-                args=[nothing, attr(frame=attr(duration=frame_duration, redraw=true), fromcurrent=true)]
-            )]
-        )],
-        template=template,
-    )
-
     return Plot(initial_trace, layout, frames)
 end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
     return make_panel([
+        Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "value"=>10.0, "position"=>(1,1)),
+        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "value"=>0.1, "position"=>(2,1)),
         Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,2)),
         Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,3)),
         Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1,4)),
         Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,2)),
         Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,3)),
         Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,4)),
-        Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "position"=>(1,1)),
-        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "position"=>(2,1)),
-    ]; shape=(2,4), row_style=Dict(
+    ]; shape=(2,4), panel_style=Dict(
         "display" => "flex",
-        "alignItems" => "center",
-        "gap" => "10px",
-        "marginBottom" => "8px"
+        "alignItems" => "center"
     ))
 end
 
 """
-    initial_state(interfaces::Dict{String, Float64}) -> Dict{String, Float64}
+    initial_state(interfaces::Dict{String, Float64}) -> t_final, dt, x0, params, state_names
 
 Produce the initial state of the quadcopter based on interface slider values.
-Expected keys in `interfaces`: "roll", "pitch", "yaw", "motor_speeds" (array of 4 floats)
+Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initial_state((roll, pitch, yaw, p, q, r, t, dt))
-    return [roll, pitch, yaw, p, q, r, t, dt]
-end
-
-function quadcopter_simulation(inputs)
-    t_final = inputs[7]
-    dt = inputs[8]
+function initial_state((t_final, dt, roll, pitch, yaw, p, q, r))
+    # Define the names of all the states to save into the df
     # Extract initial states from input
-    u0 = inputs[1:6]
-    # Define the names of all the interfaces
     state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
+    x0 = [roll, pitch, yaw, p, q, r]
     # Define parameters (p). Assuming zero constant control torques for an uncontrolled test 
     # and zero residual angular speed (Ωr) unless dynamically provided.
     params = (
-        torques = SVector(0.0, 0.0, 0.0), # [τx, τy, τz]
+        torques = SVector(0.0, 0.0, 0.0), # [τx, τy, τz] # embed control law here
         I_diag = diag(I),
         J_r = J_ROTOR,
         Ar = AR_DRAG,
         Omega_r = 0.0 
     )
+    return t_final, dt, x0, params, state_names
+end
+
+function quadcopter_simulation((t_final, dt, x0, params, state_names))
+    @info "Running Simulation"
     # run sim with RK4
-    rk4_simulation(attitude_dynamics!, u0; t_final=t_final, dt=dt, params=params, state_names=state_names)
+    rk4_simulation(attitude_dynamics!, x0; t_final=t_final, dt=dt, params=params, state_names=state_names)
 end
 
 # --- Main execution ---
@@ -239,7 +248,7 @@ function main()
         initial_state, # Convert Control panel to initial state
         quadcopter_simulation, # Use RK4 to simulate
         Dict("main_view" => animate_quadcopter), # Render vizuals
-        ["roll", "pitch", "yaw", "p", "q", "r"]
+        ["t_final", "dt", "roll", "pitch", "yaw", "p", "q", "r"]
     )
     run_server(app, "127.0.0.1", 8050)
 end
