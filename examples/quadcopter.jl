@@ -110,16 +110,6 @@ function relative_motor_positions(φ, θ, ψ, wing_length)
 end
 
 """
-    initial_state(interfaces::Dict{String, Float64}) -> Dict{String, Float64}
-
-Produce the initial state of the quadcopter based on interface slider values.
-Expected keys in `interfaces`: "roll", "pitch", "yaw", "motor_speeds" (array of 4 floats)
-"""
-function initial_state((roll, pitch, yaw, p, q, r))
-    return [roll, pitch, yaw, p, q, r]
-end
-
-"""
     animate_quadcopter(df::DataFrame; wing_length=1.0, template="plotly_dark", frame_duration=50)
 
 Build a PlotlyJS animation from a DataFrame `df` that must have columns:
@@ -195,13 +185,15 @@ end
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
     return make_panel([
-        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,1)),
-        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,2)),
-        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1,3)),
-        Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,1)),
-        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,2)),
-        Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,3)),
-    ]; shape=(2,3), row_style=Dict(
+        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,2)),
+        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,3)),
+        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1,4)),
+        Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,2)),
+        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,3)),
+        Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,4)),
+        Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "position"=>(1,1)),
+        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "position"=>(2,1)),
+    ]; shape=(2,4), row_style=Dict(
         "display" => "flex",
         "alignItems" => "center",
         "gap" => "10px",
@@ -209,7 +201,23 @@ function quadcopter_interfaces()
     ))
 end
 
-function quadcopter_simulation(u0; t_final=1.0, dt=0.1, state_names=["roll", "pitch", "yaw", "p", "q", "r"])
+"""
+    initial_state(interfaces::Dict{String, Float64}) -> Dict{String, Float64}
+
+Produce the initial state of the quadcopter based on interface slider values.
+Expected keys in `interfaces`: "roll", "pitch", "yaw", "motor_speeds" (array of 4 floats)
+"""
+function initial_state((roll, pitch, yaw, p, q, r, t, dt))
+    return [roll, pitch, yaw, p, q, r, t, dt]
+end
+
+function quadcopter_simulation(inputs)
+    t_final = inputs[7]
+    dt = inputs[8]
+    # Extract initial states from input
+    u0 = inputs[1:6]
+    # Define the names of all the interfaces
+    state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
     # Define parameters (p). Assuming zero constant control torques for an uncontrolled test 
     # and zero residual angular speed (Ωr) unless dynamically provided.
     params = (

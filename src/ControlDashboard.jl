@@ -70,20 +70,19 @@ module ControlDashboard
 
     # Arguments 
     - `sol::` : The output of DifferentialEquations.solve().
-    - `state_names::Vector{String}` : The names of the states to extract from the 
-    solution. This is also the columns of the DataFrame.
+    - `cols::Vector{String}` : Column names of the DataFrame.
 
     # Returns
     - `df::DataFrame` : States and sample times extracted from a sol.
     """
-    function sol_to_dataframe(sol; state_names=nothing)
+    function sol_to_dataframe(sol; cols=nothing)
         arr = Array(sol)  # each column is a state, rows = time steps
         df = DataFrame(time = sol.t) # sol should always have t
         # Auto-generate names if not provided
-        if isnothing(state_names)
-            state_names = ["x$(i)" for i in 1:size(arr, 1)]
+        if isnothing(cols)
+            cols = ["x$(i)" for i in 1:size(arr, 1)]
         end
-        for (i, name) in enumerate(state_names)
+        for (i, name) in enumerate(cols)
             df[!, Symbol(name)] = arr[i, :]  # grab the i-th state trajectory
         end
         return df
@@ -115,6 +114,6 @@ module ControlDashboard
         # for non-stiff dynamics like this attitude model [12, 16].
         sol = solve(prob, Tsit5(), saveat=dt, p=params)
         # Process results into DataFrame
-        return sol_to_dataframe(sol; state_names=state_names)
+        return sol_to_dataframe(sol; cols=state_names)
     end
 end # module ControlDashboards

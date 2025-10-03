@@ -5,13 +5,9 @@ module ControlPanel
     export make_panel, build_component, sample_time_and_duration_sliders
 
     # builder for each component
-    function build_component(config::Dict, row_style=Dict())
-
-        base_row_style = Dict("display"=>"flex", "alignItems"=>"center", "gap"=>"10px", "marginBottom"=>"8px")
-        base_label_style = Dict("width"=>"160px", "marginRight"=>"6px")
-        base_input_style = Dict("width"=>"140px")
+    function build_component(config::Dict, component_style=Dict())
         
-        ctype = get(config, "component", "input")  # default to input
+        ctype = get(config, "component", "input")
         label = get(config, "label", "")
         compid = get(config, "id", "")
 
@@ -26,7 +22,7 @@ module ControlPanel
                 inputMode=get(config,"inputmode","numeric"),
                 min=get(config,"min",nothing),
                 max=get(config,"max",nothing),
-                style=base_input_style
+                style=Dict("width"=>"140px")
             )
         elseif ctype == "slider"
             range = get(config,"max",1.0) - get(config,"min",0.0)
@@ -38,32 +34,38 @@ module ControlPanel
                 min=get(config,"min",0.0),
                 max=get(config,"max",1.0),
                 step=get(config,"step",0.1),
-                value=get(config,"value",get(config,"min",0.0)), # Default must be valid
+                value=get(config,"value",get(config,"min",0.0)),
                 marks=get(config,"marks",marks),
-                tooltip=Dict("always_visible"=>true)
+                tooltip=Dict("always_visible"=>true),
             )
         elseif ctype == "dropdown"
             component = dcc_dropdown(
                 id=compid,
                 options=get(config,"options",[]),
-                value=get(config,"value",nothing),
+                value=get(config,"value",""),
                 clearable=get(config,"clearable",true),
                 searchable=get(config,"searchable",true),
                 multi=get(config,"multi",false),
-                style=base_input_style
+                style=Dict("width"=>"160px")
             )
         else
             error("Unknown component type: $ctype")
         end
 
-        return html_div([
-            html_label(label, style=base_label_style),
-            component
-        ], style=base_row_style)
+        return html_div(
+            [html_label(label, style=Dict(
+                    "display" => "block",       # ensures label sits above
+                    "text-align" => "center",   # center label over component
+                    "margin-bottom" => "6px",
+                    "font-weight" => "bold"
+                )), component
+            ],
+            style=component_style
+        )
     end
 
     """
-    make_panel(configs::Vector{Dict}; shape=(nothing, nothing), row_style=Dict(), col_style=Dict())
+    make_panel(configs::Vector{Dict}; shape=(nothing, nothing), component_style=Dict(), col_style=Dict())
 
     Build a flexible Dash panel of UI components.
 
@@ -85,14 +87,13 @@ module ControlPanel
 
     Keywords:
     - `shape=(nrows, ncols)` → arrange components in a grid
-    - `row_style`, `col_style` → CSS dicts merged with defaults
+    - `component_style`, `panel_style` → CSS dicts that specify the style of panels and components
     """
     function make_panel(configs::Vector{<:Dict}; shape=(1,length(configs)),
-                        row_style=Dict(), col_style=Dict())
+                        component_style=Dict(), panel_style=Dict())
 
-        # vertical stack if no shape
-        if shape == (1,length(configs))
-            return [build_component(config, row_style) for config in configs]
+        if shape[1] == 1
+            return [build_component(config, component_style) for config in configs]
         else
             nrows, ncols = shape
             grid = [html_div([]) for _ in 1:(nrows*ncols)]
@@ -101,11 +102,11 @@ module ControlPanel
                 if pos !== nothing
                     i,j = pos
                     idx = (i-1)*ncols + j
-                    grid[idx] = build_component(config, row_style)
+                    grid[idx] = build_component(config, component_style)
                 else
                     empty_idx = findfirst(x -> isempty(x.children), grid)
                     if empty_idx !== nothing
-                        grid[empty_idx] = build_component(config, row_style)
+                        grid[empty_idx] = build_component(config, component_style)
                     end
                 end
             end
@@ -116,7 +117,7 @@ module ControlPanel
                 push!(rows,
                     html_div(
                         grid[start:stop], 
-                        style=merge(Dict("display"=>"flex","gap"=>"20px"), col_style)
+                        style=panel_style
                     )
                 )
             end
@@ -130,11 +131,11 @@ module ControlPanel
     Default set of interface components (sliders + labels).
     Users can supply their own instead.
     """
-    function sample_time_and_duration_sliders(row_style=Dict(), col_style=Dict())
+    function sample_time_and_duration_sliders(component_style=Dict(), panel_style=Dict())
         comps = [
             Dict("component"=>"input", "label"=>"Sample Time", "id"=>"dt"),
             Dict("component"=>"input", "label"=>"Duration", "id"=>"t"),
         ]
-        make_panel(comps; row_style=row_style, col_style=col_style)
+        make_panel(comps; component_style=component_style, panel_style=panel_style)
     end
 end # module

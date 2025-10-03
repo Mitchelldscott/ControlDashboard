@@ -43,7 +43,24 @@ sin_wave_interfaces = make_panel([
         Dict("component"=>"slider", "label"=>"Frequency", "id"=>"frequency", "min"=>1e-2, "max"=>10.0, "step"=>1e-2, "value"=>1.0),
         Dict("component"=>"slider", "label"=>"Phase", "id"=>"phase", "min"=>-5.0, "max"=>5.0, "step"=>1e-1, "value"=>0.0),
         Dict("component"=>"slider", "label"=>"Sample time", "id"=>"dt", "min"=>1e-2, "max"=>1.0, "step"=>1e-2, "value"=>0.1),
-    ])
+    ]; 
+    shape=(2,2),
+    panel_style=Dict(
+        "display" => "flex",
+        "flex-direction" => "row",
+        "flex-wrap" => "wrap",      # wrap when window is narrow
+        "justify-content" => "space-evenly",
+        "align-items" => "stretch",
+        "width" => "100%"
+    ),
+    component_style=Dict(
+        "flex" => "1",
+        "width" => "100%",
+        "display" => "flex",
+        "flex-direction" => "column",
+        "align-items" => "stretch"
+    )
+)
 
 # --- Main execution block ---
 function main()    
@@ -51,7 +68,7 @@ function main()
 
     # Create the app by passing our custom simulation functions to the dashboard wrapper
     app = initialize_dashboard("Sinusoid Tuner"; interfaces=sin_wave_interfaces)
-    app = set_callbacks(
+    set_callbacks!(
         app,
         initial_state,
         run_sin_simulation,
