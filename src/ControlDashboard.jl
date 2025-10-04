@@ -16,15 +16,16 @@ module ControlDashboard
     Factory function that initializes a Dash app with the provided interfaces and graphs.
     """
     function initialize_dashboard(title; 
+        title_style=Dict("textAlign" => "center"),
         interfaces=sample_time_and_duration_sliders(), 
         graphs=[dcc_graph(id = "main_view")]
     )
-        app = dash(external_stylesheets=["https://bootswatch.com/5/cyborg/bootstrap.min.css"])
+        app = dash(external_stylesheets=["https://bootswatch.com/5/darkly/bootstrap.min.css"])
 
         app.layout = html_div() do
-            html_h1(title, style = Dict("textAlign" => "center")),
-            html_div(interfaces),  # user-defined or default interfaces
-            graphs...               # user-defined or default graphs
+            html_h1(title, style = title_style),
+            html_div(interfaces),  # Control Panel
+            graphs...               # vizualizations
         end
 
         return app

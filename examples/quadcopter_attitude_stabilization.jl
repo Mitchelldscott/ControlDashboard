@@ -69,9 +69,15 @@ function attitude_dynamics!(du, u, params, t)
     Omega_r = params.Omega_r
     kp, ki, kd = params.kp, params.ki, params.kd
     integrator = params.integrator
-    τcontrol = control_torque!(u, integrator, kp, ki, kd)
-    (w1, w2, w3, w4) = motor_mixing(τcontrol, 0.0, params)
-    (τx, τy, τz) = aerodynamics((w1, w2, w3, w4), params)
+
+    # Delay controls (simulate startup)
+    if t > 2.0
+        τ_control = control_torque!(u, integrator, kp, ki, kd)
+        (w1, w2, w3, w4) = motor_mixing(τ_control, 0.0, params)
+        (τx, τy, τz) = aerodynamics((w1, w2, w3, w4), params)
+    else
+        (τx, τy, τz) = (0.0, 0.0, 0.0)
+    end
 
     # --- 1. Attitude Kinematics (Euler Angle Rates) ---
     # Transformation from body angular velocities (p, q, r) to Euler angle rates (φ̇, θ̇, ψ̇) [2]
@@ -320,11 +326,13 @@ function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark
         updatemenus=[attr(
             type="buttons",
             showactive=false,
-            buttons=[attr(
-                label="Play",
-                method="animate",
-                args=[nothing, attr(frame=attr(duration=frame_duration, redraw=true), fromcurrent=true)]
-            )]
+            buttons=[
+                attr(
+                    label="Play",
+                    method="animate",
+                    args=[nothing, attr(frame=attr(duration=frame_duration, redraw=true), fromcurrent=true)]
+                ),
+            ]
         )],
     )
 
@@ -372,7 +380,7 @@ function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark
                     x=0, y=1,  # top-left corner
                     xref="paper", yref="paper",  # relative to entire figure
                     showarrow=false,
-                    font=attr(size=16, color="white")
+                    font=attr(size=16, color="black")
                 )]
             ),
             name="frame$i"
@@ -382,7 +390,13 @@ function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark
     # initial frame
     initial_trace = frames[1].data
 
-    return Plot(initial_trace, layout, frames)
+    plot = Plot(initial_trace, layout, frames)
+
+    # Save the plot (including frames) to HTML
+    savefig(plot, "examples/stabilization_demo.html")
+
+    # Return the plot object (optional)
+    return plot
 end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
