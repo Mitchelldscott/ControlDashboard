@@ -17,13 +17,13 @@ Rigid-body rotational dynamics for a quadcopter.
 - du = derivative
 - p = NamedTuple{(:torques, :I_diag, :J_r, :Ar, :Omega_r)} containing control moments and physical parameters.
 """
-function attitude_dynamics!(du, u, params, _t)
+function attitude_dynamics!(du, u, params, t)
     # State extraction
     φ, θ, _ψ, p, q, r = u
     
-    # Parameters extraction (I_diag = [I_x, I_y, I_z])
+    # Parameters extraction
     I_x, I_y, I_z = params.I_diag
-    τx, τy, τz = params.torques
+    (τx, τy, τz) = control_torques!(u, params.integrator, params.kp, params.ki, params.kd)
     J_r = params.J_r
     A_r = params.Ar
     Omega_r = params.Omega_r
@@ -65,6 +65,23 @@ function attitude_dynamics!(du, u, params, _t)
     # Yaw acceleration (ṙ)
     # ṙ = 1/Iz * [ (Ix - Iy)pq + τz - Ar * r ] [120, Eq 2.11c, 56]
     du[6] = (I_x - I_y) / I_z * p * q + τz / I_z - A_r / I_z * r
+end
+
+function control_torques!(state, integral_error, kp, ki, kd)
+    # state = ["roll", "pitch", "yaw", "p", "q", "r"]
+    roll, pitch, yaw, p, q, r = state
+
+    # Reference is zero, so error is just -state angles
+    err = @SVector [-roll, -pitch, -yaw]
+
+    # Derivative error = -angular rates (p,q,r)
+    derr = @SVector [-p, -q, -r]
+
+    # Update integral error
+    integral_error = integral_error .+ err
+
+    # PID control law
+    return kp .* err + ki .* integral_error + kd .* derr
 end
 
 """
@@ -205,7 +222,10 @@ function quadcopter_interfaces()
         Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,2)),
         Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,3)),
         Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,4)),
-    ]; shape=(2,4), panel_style=Dict(
+        Dict("component"=>"input", "label"=>"Kp", "id"=>"Kp", "value"=>0.1, "position"=>(3,1)),
+        Dict("component"=>"input", "label"=>"Ki", "id"=>"Ki", "value"=>0.0, "position"=>(3,2)),
+        Dict("component"=>"input", "label"=>"Kd", "id"=>"Kd", "value"=>0.05, "position"=>(3,3)),
+    ]; shape=(3,4), panel_style=Dict(
         "display" => "flex",
         "alignItems" => "center"
     ))
@@ -217,7 +237,7 @@ end
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initial_state((t_final, dt, roll, pitch, yaw, p, q, r))
+function initial_state((t_final, dt, roll, pitch, yaw, p, q, r, kp, ki, kd))
     # Define the names of all the states to save into the df
     # Extract initial states from input
     state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
@@ -225,11 +245,14 @@ function initial_state((t_final, dt, roll, pitch, yaw, p, q, r))
     # Define parameters (p). Assuming zero constant control torques for an uncontrolled test 
     # and zero residual angular speed (Ωr) unless dynamically provided.
     params = (
-        torques = SVector(0.0, 0.0, 0.0), # [τx, τy, τz] # embed control law here
         I_diag = diag(I),
         J_r = J_ROTOR,
         Ar = AR_DRAG,
-        Omega_r = 0.0 
+        Omega_r = 0.0,
+        kp = kp,
+        ki = ki,
+        kd = kd,
+        integrator = SVector(0.0,0.0,0.0)
     )
     return t_final, dt, x0, params, state_names
 end
@@ -248,7 +271,7 @@ function main()
         initial_state, # Convert Control panel to initial state
         quadcopter_simulation, # Use RK4 to simulate
         Dict("main_view" => animate_quadcopter), # Render vizuals
-        ["t_final", "dt", "roll", "pitch", "yaw", "p", "q", "r"]
+        ["t_final", "dt", "roll", "pitch", "yaw", "p", "q", "r", "Kp", "Ki", "Kd"] # expected interfaces
     )
     run_server(app, "127.0.0.1", 8050)
 end
