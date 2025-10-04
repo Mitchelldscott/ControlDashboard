@@ -1,14 +1,55 @@
 using Dash, DataFrames, PlotlyJS, LinearAlgebra, DifferentialEquations, ControlDashboard, ControlDashboard.ControlPanel
 using StaticArrays # Added for performance, standard practice in Julia rigid body dynamics [6, 7]
 
-# Constants defined in the user's snippet
-const I = Diagonal([0.01, 0.01, 0.02])  # kg·m²
-const invI = inv(I)
+# # Constants defined in the user's snippet
+# const I = Diagonal([0.01, 0.01, 0.02])  # kg·m²
+# const invI = inv(I)
 
-# --- More Accurate Dynamics Constants (Derived from sources for typical quadrotor models) ---
-# We define these constants globally for use in the simulation setup.
-const J_ROTOR = 3.357e-5 # kg m^2 (Rotor inertia, Jr) [8]
-const AR_DRAG = 0.0001 # Placeholder for aerodynamic resistance (Ar) [3]
+# # --- More Accurate Dynamics Constants (Derived from sources for typical quadrotor models) ---
+# # We define these constants globally for use in the simulation setup.
+# const J_ROTOR = 3.357e-5 # kg m^2 (Rotor inertia, Jr) [8]
+# const AR_DRAG = 0.0001 # Placeholder for aerodynamic resistance (Ar) [3]
+
+
+struct QuadcopterParams
+    I_diag::SVector{3,Float64}   # Diagonal inertia [kg·m^2]
+    J_r::Float64                 # Rotor inertia [kg·m^2]
+    Ar::Float64                  # Aerodynamic drag coefficient
+    Omega_r::Float64             # Net rotor angular velocity
+    kp::Float64                  # Proportional gains
+    ki::Float64                  # Integral gains
+    kd::Float64                  # Derivative gains
+    integrator::SVector{3,Float64} # Integral error state
+    m::Float64                   # Mass [kg]
+    g::Float64                   # Gravity [m/s^2]
+    L::Float64                   # Arm length [m]
+    kf::Float64                  # Thrust coefficient
+    km::Float64                  # Drag torque coefficient
+    P_body::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
+
+    function QuadcopterParams(; 
+    I_diag = SVector(1e-3, 1e-3, 2e-3),
+    J_r = 6e-5,
+    Ar = 1e-6,
+    Omega_r = 0.0,
+    kp = 0.05,
+    ki = 0.0,
+    kd = 0.025,
+    integrator = SVector(0.0, 0.0, 0.0),
+    m = 0.05,
+    g = 9.81,
+    L = 0.1,
+    kf = 1e-5,
+    km = 2e-6)
+        P_body = @SVector [
+            SVector( L/√2,  L/√2, 0.0),   # M1: +x, +y
+            SVector( L/√2, -L/√2, 0.0),   # M2: +x, -y
+            SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
+            SVector(-L/√2,  L/√2, 0.0)    # M4: -x, +y
+        ]
+        new(I_diag, J_r, Ar, Omega_r, kp, ki, kd, integrator, m, g, L, kf, km, P_body)
+    end
+end
 
 """
     attitude_dynamics!(du, u, p, t)
@@ -23,10 +64,14 @@ function attitude_dynamics!(du, u, params, t)
     
     # Parameters extraction
     I_x, I_y, I_z = params.I_diag
-    (τx, τy, τz) = control_torques!(u, params.integrator, params.kp, params.ki, params.kd)
     J_r = params.J_r
     A_r = params.Ar
     Omega_r = params.Omega_r
+    kp, ki, kd = params.kp, params.ki, params.kd
+    integrator = params.integrator
+    τcontrol = control_torque!(u, integrator, kp, ki, kd)
+    (w1, w2, w3, w4) = motor_mixing(τcontrol, 0.0, params)
+    (τx, τy, τz) = aerodynamics((w1, w2, w3, w4), params)
 
     # --- 1. Attitude Kinematics (Euler Angle Rates) ---
     # Transformation from body angular velocities (p, q, r) to Euler angle rates (φ̇, θ̇, ψ̇) [2]
@@ -67,7 +112,41 @@ function attitude_dynamics!(du, u, params, t)
     du[6] = (I_x - I_y) / I_z * p * q + τz / I_z - A_r / I_z * r
 end
 
-function control_torques!(state, integral_error, kp, ki, kd)
+"""
+    control_torque!(state, integral_error, kp, ki, kd) -> SVector{3,Float64}
+
+Compute body-frame control torques `[τx, τy, τz]` for a quadcopter using a PID law
+with proportional (`kp`), integral (`ki`), and derivative (`kd`) gains.
+
+# Arguments
+- `state` :: `SVector{6,Float64}`
+    The quadcopter attitude state vector:
+    `["roll", "pitch", "yaw", "p", "q", "r"]`
+    where `(roll, pitch, yaw)` are Euler angles [rad], and `(p, q, r)` are angular rates [rad/s].
+- `integral_error` :: `SVector{3,Float64}`
+    Accumulated integral of attitude errors `[∫roll_err, ∫pitch_err, ∫yaw_err]`.
+- `kp`, `ki`, `kd` :: `SVector{3,Float64}` or scalar
+    PID gains. Can be axis-specific vectors or scalars applied uniformly.
+
+# Returns
+- `SVector{3,Float64}`
+    Control torques `[τx, τy, τz]` in the body frame.
+
+# Notes
+- The reference attitude is assumed to be **zero**, so the error is simply
+  the negative of the current Euler angles.
+- Derivative error is computed from the body angular rates `[-p, -q, -r]`.
+- The integral error is **updated in place** inside the function; if persistence
+  across timesteps is required, the updated integral state must be stored externally.
+
+# Role in Feedback Control Pipeline
+(measured attitude) → [roll, pitch, yaw, p, q, r] → PID(state - reference) →
+motor mixing → rotor thrusts → body torques [τx, τy, τz]
+
+This function forms the **attitude controller** in the quadcopter feedback loop,
+stabilizing the vehicle around the desired orientation.
+"""
+function control_torque!(state, integral_error, kp, ki, kd)
     # state = ["roll", "pitch", "yaw", "p", "q", "r"]
     roll, pitch, yaw, p, q, r = state
 
@@ -85,6 +164,103 @@ function control_torques!(state, integral_error, kp, ki, kd)
 end
 
 """
+    motor_mixing(τ_control, thrust, params) -> NTuple{4, Float64}
+
+Compute the required squared angular velocities `[w1^2, w2^2, w3^2, w4^2]`
+for the four motors based on desired torques and total thrust.
+
+This function implements the inverse of the aerodynamic model, distributing
+the control effort among the four rotors.
+
+# Quadcopter Configuration ('X' Frame)
+- Motor 1: Front-Right, spins Counter-Clockwise (CCW)
+- Motor 2: Rear-Right, spins Clockwise (CW)
+- Motor 3: Rear-Left, spins Counter-Clockwise (CCW)
+- Motor 4: Front-Left, spins Clockwise (CW)
+
+
+# Arguments
+- `τ_control` :: `SVector{3,Float64}`
+    The desired control torques `[τx, τy, τz]` from the PID controller.
+- `thrust` :: `Float64`
+    The desired total thrust force [N], typically to counteract gravity.
+- `params` :: `QuadcopterParams`
+    A struct containing the physical parameters of the quadcopter (`L`, `kf`, `km`).
+
+# Returns
+- `NTuple{4, Float64}`
+    A tuple of the squared angular velocities `(w1^2, w2^2, w3^2, w4^2)` for each motor.
+    These values should be non-negative.
+"""
+function motor_mixing(τ_control::SVector{3,Float64}, thrust::Float64, params::QuadcopterParams)
+    τx, τy, τz = τ_control
+    L, kf, km = params.L, params.kf, params.km
+
+    # The relationship between forces/torques and squared motor speeds is linear:
+    # [thrust]   [ kf,    kf,    kf,    kf   ] [w1^2]
+    # [  τx  ] = [ L*kf, -L*kf, -L*kf,  L*kf  ] [w2^2]
+    # [  τy  ] = [-L*kf, -L*kf,  L*kf,  L*kf  ] [w3^2]
+    # [  τz  ]   [ km,   -km,    km,   -km   ] [w4^2]
+    #
+    # We need to solve for [w1^2, w2^2, w3^2, w4^2]. This requires inverting
+    # the matrix above. The derivation leads to the following allocation:
+
+    # Pre-calculate common terms for efficiency
+    thrust_alloc = thrust / (4.0 * kf)
+    roll_alloc   = τx / (4.0 * kf * L)
+    pitch_alloc  = τy / (4.0 * kf * L)
+    yaw_alloc    = τz / (4.0 * km)
+
+    # Distribute allocations to each motor based on the inverted mixing matrix
+    w1_sq = thrust_alloc + roll_alloc - pitch_alloc + yaw_alloc
+    w2_sq = thrust_alloc - roll_alloc - pitch_alloc - yaw_alloc
+    w3_sq = thrust_alloc - roll_alloc + pitch_alloc + yaw_alloc
+    w4_sq = thrust_alloc + roll_alloc + pitch_alloc - yaw_alloc
+
+    # Ensure motor commands are not negative (motors can't spin backward)
+    # The `max(0.0, ...)` acts as a simple saturation model.
+    return (max(0.0, w1_sq), max(0.0, w2_sq), max(0.0, w3_sq), max(0.0, w4_sq))
+end
+
+"""
+    aerodynamics(w_sq, params) -> SVector{3,Float64}
+
+Compute the actual body-frame torques `[τx, τy, τz]` generated by the motors
+spinning at given (squared) angular velocities.
+
+This function models the physics of the quadcopter and is the "forward" model,
+which is the inverse of the `motor_mixing` function. It's used within the
+dynamics simulation to determine how the motor outputs affect the vehicle's state.
+
+# Arguments
+- `w_sq` :: `NTuple{4, Float64}`
+    A tuple of the squared angular velocities `(w1^2, w2^2, w3^2, w4^2)`.
+- `params` :: `QuadcopterParams`
+    A struct containing the quadcopter's physical parameters (`L`, `kf`, `km`).
+
+# Returns
+- `SVector{3,Float64}`
+    The resultant aerodynamic torques `[τx, τy, τz]` in the body frame.
+"""
+function aerodynamics((w1_sq, w2_sq, w3_sq, w4_sq)::NTuple{4, Float64}, params::QuadcopterParams)
+    L, kf, km = params.L, params.kf, params.km
+
+    # Torque from roll (motors 2 & 4 vs 1 & 3)
+    # Note: This is a simplified model. For the X-frame, a factor of sin(π/4)
+    # would be more precise, but often L is an "effective" length that absorbs this.
+    # The key is that the aerodynamics model must match the motor_mixing model.
+    τx = L * kf * (w1_sq - w2_sq - w3_sq + w4_sq)
+
+    # Torque from pitch (motors 3 & 4 vs 1 & 2)
+    τy = L * kf * (-w1_sq - w2_sq + w3_sq + w4_sq)
+
+    # Torque from yaw (motor drag of CCW motors 1 & 3 vs CW motors 2 & 4)
+    τz = km * (w1_sq - w2_sq + w3_sq - w4_sq)
+
+    return @SVector [τx, τy, τz]
+end
+
+"""
     relative_motor_positions(φ, θ, ψ, wing_length)
 
 Compute the positions of the four quadcopter motors in 3D space, rotated according
@@ -98,17 +274,7 @@ center of mass (COM). Assumes '+' configuration.
 # Returns
 - `Vector{Vector{Float64}}`: List of 4 motor positions `[x, y, z]` in the inertial frame after rotation.
 """
-function relative_motor_positions(φ, θ, ψ, wing_length)
-    l = wing_length
-
-    # Positions in body frame ('+' configuration: +x, +y, -x, -y)
-    P_body = [
-        SVector(l, 0.0, 0.0),    # Front (x+)
-        SVector(0.0, l, 0.0),    # Left (y+)
-        SVector(-l, 0.0, 0.0),   # Rear (x-)
-        SVector(0.0, -l, 0.0)    # Right (y-)
-    ]
-
+function relative_motor_positions(φ, θ, ψ, P_body)
     # Rotation matrix R_IB (body → inertial) using ZYX (yaw-pitch-roll)
     cψ, sψ = cos(ψ), sin(ψ)
     cθ, sθ = cos(θ), sin(θ)
@@ -127,22 +293,21 @@ function relative_motor_positions(φ, θ, ψ, wing_length)
 end
 
 """
-    animate_quadcopter(df::DataFrame; wing_length=1.0, template="plotly_dark", frame_duration=50)
+    animate_quadcopter(df::DataFrame; params=QuadcopterParams(), template="plotly_dark", frame_duration=50)
 
 Build a PlotlyJS animation from a DataFrame `df` that must have columns:
   :time, :roll, :pitch, :yaw
 
 Each row produces a single frame; motor positions are computed by
-`relative_motor_positions(roll, pitch, yaw, wing_length)`. COM is at origin.
+`relative_motor_positions(roll, pitch, yaw, params)`. COM is at origin.
 
 Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
-function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_duration=50)
-
+function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark", frame_duration=50)
     @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
-    colorway = PlotlyJS.templates[template].layout[:colorway]
-    quad_color = colorway[1]
-    prop_color = colorway[2]
+    wing_length = params.L
+    quad_color = "black"
+    prop_color = ["orange"; fill("red", 3)...]
     layout = Layout(
         template=template,
         scene=attr(
@@ -172,7 +337,7 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
         yaw   = df.yaw[i]
 
         # calculate motor positions from Euler angles
-        motors = relative_motor_positions(roll, pitch, yaw, wing_length)
+        motors = relative_motor_positions(roll, pitch, yaw, params.P_body)
         push!(frames, frame(
             data=[
                 scatter3d(
@@ -199,8 +364,17 @@ function animate_quadcopter(df; wing_length=0.1, template="plotly_dark", frame_d
                     mode="lines",
                     line=attr(width=3, color=quad_color),
                     template=template,
-                )
+                ),
             ],
+            layout=attr(
+                annotations=[attr(
+                    text="Frame $i",
+                    x=0, y=1,  # top-left corner
+                    xref="paper", yref="paper",  # relative to entire figure
+                    showarrow=false,
+                    font=attr(size=16, color="white")
+                )]
+            ),
             name="frame$i"
         ))
     end
@@ -242,17 +416,11 @@ function initial_state((t_final, dt, roll, pitch, yaw, p, q, r, kp, ki, kd))
     # Extract initial states from input
     state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
     x0 = [roll, pitch, yaw, p, q, r]
-    # Define parameters (p). Assuming zero constant control torques for an uncontrolled test 
-    # and zero residual angular speed (Ωr) unless dynamically provided.
-    params = (
-        I_diag = diag(I),
-        J_r = J_ROTOR,
-        Ar = AR_DRAG,
-        Omega_r = 0.0,
+    # Define parameters (p).
+    params = QuadcopterParams(;
         kp = kp,
         ki = ki,
         kd = kd,
-        integrator = SVector(0.0,0.0,0.0)
     )
     return t_final, dt, x0, params, state_names
 end
@@ -265,7 +433,7 @@ end
 
 # --- Main execution ---
 function main()
-    app = initialize_dashboard("Quadcopter Attitude Controller"; interfaces=quadcopter_interfaces())
+    app = initialize_dashboard("Quadcopter Attitude Stabilizer"; interfaces=quadcopter_interfaces())
     set_callbacks!(
         app,
         initial_state, # Convert Control panel to initial state
