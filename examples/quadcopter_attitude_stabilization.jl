@@ -316,6 +316,7 @@ function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark
     prop_color = ["orange"; fill("red", 3)...]
     layout = Layout(
         template=template,
+        showlegend = false,
         scene=attr(
             aspectmode="manual",   # don't auto-stretch
             aspectratio=attr(x=1, y=1, z=1),  # equal scaling
@@ -391,9 +392,6 @@ function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark
     initial_trace = frames[1].data
 
     plot = Plot(initial_trace, layout, frames)
-
-    # Save the plot (including frames) to HTML
-    savefig(plot, "examples/stabilization_demo.html")
 
     # Return the plot object (optional)
     return plot
