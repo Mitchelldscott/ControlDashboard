@@ -4,9 +4,7 @@
 [![Coverage](https://codecov.io/gh/MitchellDScott/ControlDashboard/branch/main/graph/badge.svg)](https://codecov.io/gh/MitchellDScott/ControlDashboard)
 [![Docs](https://img.shields.io/badge/docs-html-blue.svg)](https://MitchellDScott.github.io/ControlDashboard/)
 
-
-A dashboard and visualization toolkit for control system simulations and interactive design in Julia.
-
+A visualization toolkit for control system simulations and interactive design in Julia.
 
 ![quadcopter design tool](./examples/stabilization_demo.png)
 
