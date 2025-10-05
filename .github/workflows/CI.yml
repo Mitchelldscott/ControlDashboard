@@ -11,9 +11,9 @@ jobs:
     name: Testing Julia ${{ matrix.version }}
     runs-on: ubuntu-latest
     
-    strategy: # Moved strategy to a more conventional position
+    strategy:
       matrix:
-        version: ['1.6', '1.10', '1.11', 'nightly'] # Added LTS and a stable version for better coverage
+        version: ['1.6', '1.10', '1.11', 'nightly']
 
     steps:
       - name: Checkout repository
