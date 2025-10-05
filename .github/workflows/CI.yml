@@ -40,11 +40,11 @@ jobs:
           julia --project=. -e ' using Pkg; Pkg.instantiate();'
             
       - name: Run tests
-        run: julia --project=. -e 'using Pkg; Pkg.test(; coverage=true);'
+        run: julia --project=. test/CodeCoverage.jl
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
+          files: "lcov.info"
           fail_ci_if_error: false
