@@ -1,7 +1,7 @@
 # ControlDashboard.jl
 
 [![Build Status](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml/badge.svg)](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml)
-[![Coverage](https://codecov.io/gh/MitchellDScott/ControlDashboard/branch/main/graph/badge.svg)](https://codecov.io/gh/MitchellDScott/ControlDashboard)
+[![Coverage](https://codecov.io/gh/mitchelldscott/ControlDashboard/branch/master/graph/badge.svg?token=)](https://app.codecov.io/gh/mitchelldscott/ControlDashboard)
 [![Docs](https://img.shields.io/badge/docs-html-blue.svg)](https://MitchellDScott.github.io/ControlDashboard/)
 
 A visualization toolkit for control system simulations and interactive design in Julia.
