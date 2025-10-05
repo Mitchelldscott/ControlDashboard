@@ -1,6 +1,4 @@
-using Pkg
-Pkg.develop(PackageSpec(path = joinpath(@__DIR__, "..")))
-Pkg.instantiate()
+using Pkg; Pkg.develop(path = "."); Pkg.instantiate()
 
 using Documenter
 using ControlDashboard 
