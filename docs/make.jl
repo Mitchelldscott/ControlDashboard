@@ -13,7 +13,7 @@ makedocs(
     clean = true, 
     format = Documenter.HTML(
         # Set prettyurls=true for nice URLs when hosted (e.g., on GitHub Pages)
-        prettyurls = get(ENV, "CI", "false") == "true",
+        prettyurls = get(ENV, "CI", "false") == "false",
         canonical = "https://MitchellDScott.github.io/ControlDashboard/stable/",
     ),
     pages = [
