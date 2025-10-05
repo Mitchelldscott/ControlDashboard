@@ -1,6 +1,6 @@
 # ControlDashboard.jl
 
-[![Build Status](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml/badge.svg)](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml)
+[![Build Status](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/run_tests_with_coverage.yml/badge.svg)](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/run_tests_with_coverage.yml)
 [![Coverage](https://codecov.io/gh/mitchelldscott/ControlDashboard/branch/master/graph/badge.svg?token=)](https://app.codecov.io/gh/mitchelldscott/ControlDashboard)
 <!-- [![Docs](https://img.shields.io/badge/docs-html-blue.svg)](https://MitchellDScott.github.io/ControlDashboard/) -->
 
