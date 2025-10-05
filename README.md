@@ -1,14 +1,16 @@
-# ControlDashboard
+# ControlDashboard.jl
 
-A Dash + Plotly package to setup interactive simulations
+[![Build Status](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml/badge.svg)](https://github.com/MitchellDScott/ControlDashboard/actions/workflows/CI.yml)
+[![Coverage](https://codecov.io/gh/MitchellDScott/ControlDashboard/branch/main/graph/badge.svg)](https://codecov.io/gh/MitchellDScott/ControlDashboard)
+[![Docs](https://img.shields.io/badge/docs-html-blue.svg)](https://MitchellDScott.github.io/ControlDashboard/)
+
+
+A dashboard and visualization toolkit for control system simulations and interactive design in Julia.
+
 
 ![quadcopter design tool](./examples/stabilization_demo.png)
 
-Here’s a concise **“Getting Started (Developing)”** section for your `ControlDashboard` README:
-
----
-
-## 🧭 Getting Started (Developing)
+## Getting Started
 
 ### 1. **Install Julia**
 
@@ -18,7 +20,7 @@ Here’s a concise **“Getting Started (Developing)”** section for your `Cont
 ### 2. **Set up the environment**
 
 ```bash
-git clone https://github.com/<your-username>/ControlDashboard.jl.git
+git clone https://github.com/MitchellDScott/ControlDashboard.jl.git
 cd ControlDashboard
 julia --project=.
 ```
@@ -33,17 +35,25 @@ Pkg.instantiate()
 
 ### 4. **Run tests**
 
+In a julia script/console:
+
 ```julia
 include("test/runtests.jl")
 ```
 
+or from the Julia REPL
+
 ```julia
-$> julia --project=.
 julia> ]
+(@v1.11) pkg> activate .
 (ControlDashboard) pkg> test
 ```
 
 ### 5. **Run examples**
+
+```bash
+julia --project=. examples/sinusoid.jl
+```
 
 ```bash
 julia --project=. examples/quadcopter_attitude_stabilization.jl
