@@ -4,7 +4,77 @@ module ControlPanel
 
     export make_panel, build_component, sample_time_and_duration_sliders
 
-    # builder for each component
+    """
+        build_component(config::Dict; component_style::Dict=Dict())
+
+    Create a standard Dash UI component (`input`, `slider`, or `dropdown`) with an associated label.  
+    This internal factory function standardizes how configuration dictionaries map to Dash components, simplifying UI assembly.
+
+    # Arguments
+    - `config::Dict`: **Required.** Defines the component type and its properties (see Configuration Keys below).
+    - `component_style::Dict`: **Optional.** Styles the outer `html_div` wrapper that contains the label and component. Defaults to `Dict()`.
+
+    # Returns
+    - `html_label`: Label component centered above the interactive element.  
+    - `element`: Interactive Dash HTML component created from the `config` dictionary.
+
+    # Configuration Keys
+    The `config` dictionary must contain the following foundational keys:
+
+    | Key            | Description |
+    |---------------|----------|--------------|
+    | `"component"` | Defines the component type: `"input"`, `"slider"`, or `"dropdown"`. |
+    | `"label"`     | The text displayed above the component. |
+    | `"id"`        | Unique component ID, required for Dash callbacks. |
+
+    >  `config` may also contain specific field/value pairs for each component.
+
+    ---
+
+    ## Component-Specific Keys
+
+    ### **Input**
+    | Key | Default | Description |
+    |------|----------|-------------|
+    | `"type"`  | `"number"` | The HTML input type (`"text"`, `"number"`, etc.). |
+    | `"value"` | `0.0` | Initial input value. |
+    | `"step"`  | `1e-5` | Step increment for numeric inputs. |
+    | `"min"`   | `nothing` | Minimum allowable value. |
+    | `"max"`   | `nothing` | Maximum allowable value. |
+
+    ### **Slider**
+    | Key | Default | Description |
+    |------|----------|-------------|
+    | `"min"`   | `0.0` | Minimum slider value. |
+    | `"max"`   | `1.0` | Maximum slider value. (Error if `min > max`.) |
+    | `"step"`  | `0.1` | Step increment. |
+    | `"marks"` | *(Calculated)* | Dict of marks; defaults to 5 evenly spaced values. |
+
+    ### **Dropdown**
+    | Key | Default | Description |
+    |------|----------|-------------|
+    | `"options"` | `[]` | List of option dicts with `"label"` and `"value"` keys. |
+    | `"value"`   | `""` | Initially selected value(s). |
+    | `"multi"`   | `false` | Allow multiple selections if `true`. |
+
+    ---
+
+    # Example
+
+    ```julia
+    slider_config = Dict(
+        "component" => "slider",
+        "id" => "weight-slider",
+        "label" => "Select Weight (kg)",
+        "min" => 50.0,
+        "max" => 100.0,
+        "step" => 0.5,
+        "value" => 75.0
+    )
+
+    # Returns a `Div` containing the label and slider component
+    weight_component = build_component(slider_config)
+    """
     function build_component(config::Dict, component_style=Dict())
         
         ctype = get(config, "component", "input")
@@ -65,7 +135,7 @@ module ControlPanel
     end
 
     """
-    make_panel(configs::Vector{Dict}; shape=(nothing, nothing), component_style=Dict(), col_style=Dict())
+        make_panel(configs::Vector{Dict}; shape=(nothing, nothing), component_style=Dict(), col_style=Dict())
 
     Build a flexible Dash panel of UI components.
 
@@ -126,7 +196,7 @@ module ControlPanel
     end
 
     """
-    make_interfaces() -> Vector{DashComponent}
+        sample_time_and_duration_sliders(; component_style::Dict, panel_style::Dict) -> Vector{DashComponent}
 
     Default set of interface components (sliders + labels).
     Users can supply their own instead.

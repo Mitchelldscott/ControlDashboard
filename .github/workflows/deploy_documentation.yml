@@ -8,12 +8,8 @@ on:
 
 jobs:
   test:
-    name: Deploying documentation for 1.11
+    name: Deploy documentation
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        version: ['1.11']
 
     steps:
       - name: Checkout repository
@@ -22,7 +18,7 @@ jobs:
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: ${{ matrix.version }}
+          version: 1.11
 
       - name: Cache dependencies
         uses: julia-actions/cache@v1
@@ -34,7 +30,7 @@ jobs:
             
       - name: Build and deploy documentation
         # Only run this on the main branch ('master') and for a single stable version ('1.11').
-        if: github.ref == 'refs/heads/master' && matrix.version == '1.11'
+        if: github.ref == 'refs/heads/master'
         env:
           # The GITHUB_TOKEN is required for Documenter.jl to push the built HTML to gh-pages.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
