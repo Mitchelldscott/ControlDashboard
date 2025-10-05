@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: Testing Julia ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        version: ['1.10', '1.11', '1.12.0-rc3']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+
+      - name: Install dependencies
+        run: | 
+          rm -f Manifest.toml 
+          julia --project=. -e 'using Pkg; Pkg.instantiate();'
+            
+      - name: Build and deploy documentation
+        # Only run this on the main branch ('master') and for a single stable version ('1.11').
+        if: github.ref == 'refs/heads/master' && matrix.version == '1.11'
+        env:
+          # The GITHUB_TOKEN is required for Documenter.jl to push the built HTML to gh-pages.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Set JULIA_DEBUG=Documenter for more verbose logs during the doc build
+          JULIA_DEBUG: Documenter 
+        run: |
+          julia --project=docs -e 'using Pkg; Pkg.activate("docs"); Pkg.instantiate();'
+          julia --project=docs docs/make.jl
