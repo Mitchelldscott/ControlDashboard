@@ -13,7 +13,7 @@ A visualization toolkit for control system simulations and interactive design in
 ### 1. **Install Julia**
 
 * Download and install from [julialang.org/downloads](https://julialang.org/downloads/).
-* Recommended: Julia ≥ 1.10.
+* Recommended: Julia ≥ 1.11.
 
 ### 2. **Set up the environment**
 
