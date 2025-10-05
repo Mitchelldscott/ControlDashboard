@@ -13,7 +13,7 @@ jobs:
     
     strategy:
       matrix:
-        version: ['1.11', 'nightly']
+        version: ['1.11', '1.12']
 
     steps:
       - name: Checkout repository
