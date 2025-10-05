@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: Run tests
+    name: Testing Julia ${{ matrix.version }}
     runs-on: ubuntu-latest
+    
+    strategy: # Moved strategy to a more conventional position
+      matrix:
+        version: ['1.6', '1.10', '1.11', 'nightly'] # Added LTS and a stable version for better coverage
 
     steps:
       - name: Checkout repository
@@ -18,27 +22,25 @@ jobs:
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: '1.11'
+          version: ${{ matrix.version }}
 
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ hashFiles('Project.toml') }}
           restore-keys: |
-            ${{ runner.os }}-julia-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
 
-      - name: Instantiate package (without full deps)
-        run: |
-          julia --project=. -e '
-          using Pkg;
-          Pkg.resolve();
-          Pkg.instantiate();'
-
+      - name: Install dependencies
+        run: | 
+          rm -f Manifest.toml 
+          julia --project=. -e ' using Pkg; Pkg.instantiate();'
+            
       - name: Run tests
-        run: julia --project=. -e '
-          using Pkg;
-          Pkg.test(; coverage=true);'
+        run: julia --project=. -e 'using Pkg; Pkg.test(; coverage=true);'
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
