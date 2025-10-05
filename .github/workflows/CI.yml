@@ -33,8 +33,7 @@ jobs:
           julia --project=. -e '
           using Pkg;
           Pkg.resolve();
-          Pkg.instantiate();
-          '
+          Pkg.instantiate();'
 
       - name: Run tests
         run: julia --project=. -e '
