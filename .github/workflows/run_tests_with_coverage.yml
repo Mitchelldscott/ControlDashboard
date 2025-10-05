@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: | 
           rm -f Manifest.toml 
-          julia --project=. -e ' using Pkg; Pkg.instantiate();'
+          julia --project=. -e 'using Pkg; Pkg.instantiate();'
             
       - name: Run tests
         run: julia --project=. test/CodeCoverage.jl
