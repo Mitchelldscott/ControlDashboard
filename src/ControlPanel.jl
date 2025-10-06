@@ -15,19 +15,18 @@ module ControlPanel
     - `component_style::Dict`: **Optional.** Styles the outer `html_div` wrapper that contains the label and component. Defaults to `Dict()`.
 
     # Returns
-    - `html_label`: Label component centered above the interactive element.  
-    - `element`: Interactive Dash HTML component created from the `config` dictionary.
+    - `html_div`:
+        - `html_label`: Label component centered above the interactive element.  
+        - `element`: Interactive Dash HTML component created from the `config` dictionary.
 
     # Configuration Keys
     The `config` dictionary must contain the following foundational keys:
 
-    | Key            | Description |
-    |---------------|----------|--------------|
+    | Key           | Description |
+    |---------------|----------|
     | `"component"` | Defines the component type: `"input"`, `"slider"`, or `"dropdown"`. |
     | `"label"`     | The text displayed above the component. |
     | `"id"`        | Unique component ID, required for Dash callbacks. |
-
-    >  `config` may also contain specific field/value pairs for each component.
 
     ---
 
@@ -71,9 +70,7 @@ module ControlPanel
         "step" => 0.5,
         "value" => 75.0
     )
-
-    # Returns a `Div` containing the label and slider component
-    weight_component = build_component(slider_config)
+    ```
     """
     function build_component(config::Dict, component_style=Dict())
         

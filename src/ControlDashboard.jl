@@ -36,16 +36,16 @@ module ControlDashboard
 
     Register callbacks for interactive components of a generic Dash app.
 
-        This function uses a set of input functions to initialize and run a 
+    This function uses a set of input functions to initialize and run a 
     simulation, 
 
     # Arguments
     - `state_factory::Function`: A function that takes no arguments and returns a fresh 
     initial state object (e.g., a Dict or a custom struct with initial conditions).
     - `run_simulation::Function`: A function that executes the simulation. It should accept
-    the initial state, duration, and dt as arguments and return the simulation data.
+    the initial state as input and return a dataframe.
     - `make_figure::Function`: A function that takes the simulation data and returns a
-    figure to be displayed.
+    figure to display.
     """
     function set_callbacks!(app, state_factory, run_simulation, figures, interfaces)
         # Define the callback function that links the sliders to the graph.
@@ -70,7 +70,7 @@ module ControlDashboard
     This is a helper function for simulations that use DifferentialEquations.jl.
 
     # Arguments 
-    - `sol::` : The output of DifferentialEquations.solve().
+    - `sol::` : The output of `DifferentialEquations.solve()`.
     - `cols::Vector{String}` : Column names of the DataFrame.
 
     # Returns
@@ -96,8 +96,8 @@ module ControlDashboard
 
     # Arguments
     - `system_dynamics`: A function `f!(du, u, p, t)` defining the system dynamics in-place.
-    - `initial_state`: Vector-like object representing the initial condition(s).
-    - `t_final`: (default = 5.0) Final simulation time.
+    - `initial_state`: Vector-like object or function that prepares simulation data from a tuple of interfaces.
+    - `t_final`: (default = 10.0) Final simulation time.
     - `dt`: (default = 0.01) Time step for saving results.
     - `p`: (default = nothing) Optional parameters to pass to the dynamics.
 
