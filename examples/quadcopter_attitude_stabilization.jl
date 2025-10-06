@@ -1,4 +1,10 @@
-using Dash, DataFrames, PlotlyJS, LinearAlgebra, DifferentialEquations, ControlDashboard, ControlDashboard.ControlPanel
+using Dash,
+    DataFrames,
+    PlotlyJS,
+    LinearAlgebra,
+    DifferentialEquations,
+    ControlDashboard,
+    ControlDashboard.ControlPanel
 using StaticArrays # Added for performance, standard practice in Julia rigid body dynamics [6, 7]
 
 # # Constants defined in the user's snippet
@@ -27,25 +33,26 @@ struct QuadcopterParams
     P_body::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
     spin_dirs::SVector{4,Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
 
-    function QuadcopterParams(; 
-    I_diag = SVector(1e-3, 1e-3, 2e-3),
-    J_r = 6e-5,
-    Ar = 1e-6,
-    kp = 0.05,
-    ki = 0.0,
-    kd = 0.025,
-    integrator = SVector(0.0, 0.0, 0.0),
-    m = 0.05,
-    g = 9.81,
-    L = 0.1,
-    kf = 1e-5,
-    km = 2e-6,
-    spin_dirs = SVector(1, -1, 1, -1))
+    function QuadcopterParams(;
+        I_diag = SVector(1e-3, 1e-3, 2e-3),
+        J_r = 6e-5,
+        Ar = 1e-6,
+        kp = 0.05,
+        ki = 0.0,
+        kd = 0.025,
+        integrator = SVector(0.0, 0.0, 0.0),
+        m = 0.05,
+        g = 9.81,
+        L = 0.1,
+        kf = 1e-5,
+        km = 2e-6,
+        spin_dirs = SVector(1, -1, 1, -1),
+    )
         P_body = @SVector [
-            SVector( L/√2,  L/√2, 0.0),   # M1: +x, +y
-            SVector( L/√2, -L/√2, 0.0),   # M2: +x, -y
+            SVector(L/√2, L/√2, 0.0),   # M1: +x, +y
+            SVector(L/√2, -L/√2, 0.0),   # M2: +x, -y
             SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
-            SVector(-L/√2,  L/√2, 0.0)    # M4: -x, +y
+            SVector(-L/√2, L/√2, 0.0),    # M4: -x, +y
         ]
         new(I_diag, J_r, Ar, kp, ki, kd, integrator, m, g, L, kf, km, P_body, spin_dirs)
     end
@@ -130,7 +137,7 @@ function motor_mixing(thrust, τ_control, params)
 
     # Build mixing matrix dynamically
     mixing = zeros(4, 4)
-    for i in 1:4
+    for i = 1:4
         τ_i = cross(P[i], SVector(0, 0, kf))
         mixing[1, i] = kf
         mixing[2, i] = τ_i[1]
@@ -164,24 +171,24 @@ dynamics simulation to determine how the motor outputs affect the vehicle's stat
     The resultant aerodynamic torques `[τx, τy, τz]` in the body frame.
 """
 function aerodynamics(w, params)
-  kf, km = params.kf, params.km
-  P_body = params.P_body
-  spin_dirs = params.spin_dirs
+    kf, km = params.kf, params.km
+    P_body = params.P_body
+    spin_dirs = params.spin_dirs
 
-  τ = SVector{3,Float64}(0.0, 0.0, 0.0)
-  F_z = 0.0 # no gravity
+    τ = SVector{3,Float64}(0.0, 0.0, 0.0)
+    F_z = 0.0 # no gravity
 
-  for i in 1:4
-      ω² = w[i]^2
-      Ti = kf * ω²
-      Mi = km * ω² * spin_dirs[i]
+    for i = 1:4
+        ω² = w[i]^2
+        Ti = kf * ω²
+        Mi = km * ω² * spin_dirs[i]
 
-      # Accumulate total thrust
-      F_z += Ti
-      τ += cross(P_body[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
-  end
+        # Accumulate total thrust
+        F_z += Ti
+        τ += cross(P_body[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
+    end
 
-  return F_z, τ
+    return F_z, τ
 end
 
 """
@@ -194,7 +201,7 @@ Rigid-body rotational dynamics for a quadcopter.
 function attitude_dynamics!(du, u, params, t)
     # State extraction
     φ, θ, _ψ, p, q, r = u
-    
+
     # Parameters extraction
     I_x, I_y, I_z = params.I_diag
     J_r = params.J_r
@@ -233,7 +240,7 @@ function attitude_dynamics!(du, u, params, t)
     # --- 2. Attitude dynamics (Newton-Euler) ---
     # Gyroscopic term: compute net rotor spin (signed)
     # sign convention: spin_dirs indicates +1 for CCW rotors (positive spin)
-    Ω_net = sum(spin_dirs[i] * ωs[i] for i in 1:4)   # net rotor angular velocity (rad/s)
+    Ω_net = sum(spin_dirs[i] * ωs[i] for i = 1:4)   # net rotor angular velocity (rad/s)
 
     # rate damping terms (Ar is linear damping of angular rates)
     du[4] = (I_y - I_z) / I_x * q * r - (J_r / I_x) * q * Ω_net + τx / I_x - A_r / I_x * p
@@ -262,9 +269,9 @@ function relative_motor_positions(φ, θ, ψ, P_body)
     cφ, sφ = cos(φ), sin(φ)
 
     R_IB = @SMatrix [
-        cθ*cψ     sφ*sθ*cψ - cφ*sψ    cφ*sθ*cψ + sφ*sψ;
-        cθ*sψ     sφ*sθ*sψ + cφ*cψ    cφ*sθ*sψ - sφ*cψ;
-        -sθ       sφ*cθ               cφ*cθ
+        cθ*cψ sφ*sθ*cψ - cφ*sψ cφ*sθ*cψ + sφ*sψ;
+        cθ*sψ sφ*sθ*sψ + cφ*cψ cφ*sθ*sψ - sφ*cψ;
+        -sθ sφ*cθ cφ*cθ
     ]
 
     # Rotate body-frame motor positions into inertial frame
@@ -284,83 +291,103 @@ Each row produces a single frame; motor positions are computed by
 
 Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
-function animate_quadcopter(df; params=QuadcopterParams(), template="plotly_dark", frame_duration=50)
+function animate_quadcopter(
+    df;
+    params = QuadcopterParams(),
+    template = "plotly_dark",
+    frame_duration = 50,
+)
     @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
     wing_length = params.L
     quad_color = "black"
     prop_color = ["orange"; fill("red", 3)...]
     layout = Layout(
-        template=template,
+        template = template,
         showlegend = false,
-        scene=attr(
-            aspectmode="manual",   # don't auto-stretch
-            aspectratio=attr(x=1, y=1, z=1),  # equal scaling
-            xaxis=attr(range=[-3*wing_length, 3*wing_length]),
-            yaxis=attr(range=[-3*wing_length, 3*wing_length]),
-            zaxis=attr(range=[-3*wing_length, 3*wing_length])
+        scene = attr(
+            aspectmode = "manual",   # don't auto-stretch
+            aspectratio = attr(x = 1, y = 1, z = 1),  # equal scaling
+            xaxis = attr(range = [-3*wing_length, 3*wing_length]),
+            yaxis = attr(range = [-3*wing_length, 3*wing_length]),
+            zaxis = attr(range = [-3*wing_length, 3*wing_length]),
         ),
-        updatemenus=[attr(
-            type="buttons",
-            showactive=false,
-            buttons=[
-                attr(
-                    label="Play",
-                    method="animate",
-                    args=[nothing, attr(frame=attr(duration=frame_duration, redraw=true), fromcurrent=true)]
-                ),
-            ]
-        )],
+        updatemenus = [
+            attr(
+                type = "buttons",
+                showactive = false,
+                buttons = [
+                    attr(
+                        label = "Play",
+                        method = "animate",
+                        args = [
+                            nothing,
+                            attr(
+                                frame = attr(duration = frame_duration, redraw = true),
+                                fromcurrent = true,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
     )
 
     frames = PlotlyFrame[]
 
     # loop over timesteps in df
-    for i in 1:nrow(df)
-        roll  = df.roll[i]
+    for i = 1:nrow(df)
+        roll = df.roll[i]
         pitch = df.pitch[i]
-        yaw   = df.yaw[i]
+        yaw = df.yaw[i]
 
         # calculate motor positions from Euler angles
         motors = relative_motor_positions(roll, pitch, yaw, params.P_body)
-        push!(frames, frame(
-            data=[
-                scatter3d(
-                    x=motors[1,:], 
-                    y=motors[2,:], 
-                    z=motors[3,:],
-                    mode="markers",
-                    marker=attr(size=5),
-                    line=attr(width=2, color=prop_color),
-                    template=template,
+        push!(
+            frames,
+            frame(
+                data = [
+                    scatter3d(
+                        x = motors[1, :],
+                        y = motors[2, :],
+                        z = motors[3, :],
+                        mode = "markers",
+                        marker = attr(size = 5),
+                        line = attr(width = 2, color = prop_color),
+                        template = template,
+                    ),
+                    scatter3d(
+                        x = [motors[1, 1], motors[1, 3]],
+                        y = [motors[2, 1], motors[2, 3]],
+                        z = [motors[3, 1], motors[3, 3]],
+                        mode = "lines",
+                        line = attr(width = 3, color = quad_color),
+                        template = template,
+                    ),
+                    scatter3d(
+                        x = [motors[1, 2], motors[1, 4]],
+                        y = [motors[2, 2], motors[2, 4]],
+                        z = [motors[3, 2], motors[3, 4]],
+                        mode = "lines",
+                        line = attr(width = 3, color = quad_color),
+                        template = template,
+                    ),
+                ],
+                layout = attr(
+                    annotations = [
+                        attr(
+                            text = "Frame $i",
+                            x = 0,
+                            y = 1,  # top-left corner
+                            xref = "paper",
+                            yref = "paper",  # relative to entire figure
+                            showarrow = false,
+                            font = attr(size = 16, color = "black"),
+                        ),
+                    ],
                 ),
-                scatter3d(
-                    x=[motors[1,1], motors[1,3]],
-                    y=[motors[2,1], motors[2,3]],
-                    z=[motors[3,1], motors[3,3]],
-                    mode="lines",
-                    line=attr(width=3, color=quad_color),
-                    template=template,
-                ),
-                scatter3d(
-                    x=[motors[1,2], motors[1,4]],
-                    y=[motors[2,2], motors[2,4]],
-                    z=[motors[3,2], motors[3,4]],
-                    mode="lines",
-                    line=attr(width=3, color=quad_color),
-                    template=template,
-                ),
-            ],
-            layout=attr(
-                annotations=[attr(
-                    text="Frame $i",
-                    x=0, y=1,  # top-left corner
-                    xref="paper", yref="paper",  # relative to entire figure
-                    showarrow=false,
-                    font=attr(size=16, color="black")
-                )]
+                name = "frame$i",
             ),
-            name="frame$i"
-        ))
+        )
     end
 
     # initial frame
@@ -372,39 +399,148 @@ end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
-    return make_panel([
-        Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "value"=>10.0, "position"=>(1,1)),
-        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "value"=>0.2, "position"=>(2,1)),
+    return make_panel(
+        [
+            Dict(
+                "component"=>"input",
+                "label"=>"Duration",
+                "id"=>"t_final",
+                "value"=>10.0,
+                "position"=>(1, 1),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Sample time",
+                "id"=>"dt",
+                "value"=>0.2,
+                "position"=>(2, 1),
+            ),
 
-        # Initial attitude (slightly tilted to make motion interesting)
-        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "value"=>5.0, "position"=>(1,2)),      # degrees
-        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "value"=>-15.0, "position"=>(1,3)),  # degrees
-        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "value"=>45.0, "position"=>(1,4)),      # degrees
+            # Initial attitude (slightly tilted to make motion interesting)
+            Dict(
+                "component"=>"input",
+                "label"=>"Roll",
+                "id"=>"roll",
+                "value"=>5.0,
+                "position"=>(1, 2),
+            ),      # degrees
+            Dict(
+                "component"=>"input",
+                "label"=>"Pitch",
+                "id"=>"pitch",
+                "value"=>-15.0,
+                "position"=>(1, 3),
+            ),  # degrees
+            Dict(
+                "component"=>"input",
+                "label"=>"Yaw",
+                "id"=>"yaw",
+                "value"=>45.0,
+                "position"=>(1, 4),
+            ),      # degrees
 
-        # Initial angular rates (small rotation to start)
-        Dict("component"=>"input", "label"=>"P", "id"=>"p", "value"=>0.2, "position"=>(2,2)),
-        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "value"=>-0.25, "position"=>(2,3)),
-        Dict("component"=>"input", "label"=>"R", "id"=>"r", "value"=>1.0, "position"=>(2,4)),
+            # Initial angular rates (small rotation to start)
+            Dict(
+                "component"=>"input",
+                "label"=>"P",
+                "id"=>"p",
+                "value"=>0.2,
+                "position"=>(2, 2),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Q",
+                "id"=>"q",
+                "value"=>-0.25,
+                "position"=>(2, 3),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"R",
+                "id"=>"r",
+                "value"=>1.0,
+                "position"=>(2, 4),
+            ),
 
-        # PID controller (moderate tuning for demo stability)
-        Dict("component"=>"input", "label"=>"Kp", "id"=>"Kp", "value"=>0.1, "position"=>(3,1)),
-        Dict("component"=>"input", "label"=>"Ki", "id"=>"Ki", "value"=>0.0, "position"=>(3,2)),
-        Dict("component"=>"input", "label"=>"Kd", "id"=>"Kd", "value"=>0.05, "position"=>(3,3)),
+            # PID controller (moderate tuning for demo stability)
+            Dict(
+                "component"=>"input",
+                "label"=>"Kp",
+                "id"=>"Kp",
+                "value"=>0.1,
+                "position"=>(3, 1),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Ki",
+                "id"=>"Ki",
+                "value"=>0.0,
+                "position"=>(3, 2),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Kd",
+                "id"=>"Kd",
+                "value"=>0.05,
+                "position"=>(3, 3),
+            ),
 
-        # Geometry and inertial properties
-        Dict("component"=>"input", "label"=>"Arm length", "id"=>"L", "value"=>0.22, "position"=>(3,4)), # meters
-        Dict("component"=>"input", "label"=>"Ixx", "id"=>"Ixx", "value"=>6.8e-3, "position"=>(1,5)),
-        Dict("component"=>"input", "label"=>"Iyy", "id"=>"Iyy", "value"=>9.2e-3, "position"=>(2,5)),
-        Dict("component"=>"input", "label"=>"Izz", "id"=>"Izz", "value"=>1.35e-2, "position"=>(3,5)),
+            # Geometry and inertial properties
+            Dict(
+                "component"=>"input",
+                "label"=>"Arm length",
+                "id"=>"L",
+                "value"=>0.22,
+                "position"=>(3, 4),
+            ), # meters
+            Dict(
+                "component"=>"input",
+                "label"=>"Ixx",
+                "id"=>"Ixx",
+                "value"=>6.8e-3,
+                "position"=>(1, 5),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Iyy",
+                "id"=>"Iyy",
+                "value"=>9.2e-3,
+                "position"=>(2, 5),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Izz",
+                "id"=>"Izz",
+                "value"=>1.35e-2,
+                "position"=>(3, 5),
+            ),
 
-        # Physical parameters
-        Dict("component"=>"input", "label"=>"Mass", "id"=>"m", "value"=>0.48, "position"=>(1,6)),
-        Dict("component"=>"input", "label"=>"Thrust Coeff", "id"=>"Kf", "value"=>6e-5, "position"=>(2,6)),
-        Dict("component"=>"input", "label"=>"Drag Coeff", "id"=>"Km", "value"=>1.5e-6, "position"=>(3,6))
-    ]; shape=(3,6), panel_style=Dict(
-        "display" => "flex",
-        "alignItems" => "center"
-    ))
+            # Physical parameters
+            Dict(
+                "component"=>"input",
+                "label"=>"Mass",
+                "id"=>"m",
+                "value"=>0.48,
+                "position"=>(1, 6),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Thrust Coeff",
+                "id"=>"Kf",
+                "value"=>6e-5,
+                "position"=>(2, 6),
+            ),
+            Dict(
+                "component"=>"input",
+                "label"=>"Drag Coeff",
+                "id"=>"Km",
+                "value"=>1.5e-6,
+                "position"=>(3, 6),
+            ),
+        ];
+        shape = (3, 6),
+        panel_style = Dict("display" => "flex", "alignItems" => "center"),
+    )
 end
 
 """
@@ -413,10 +549,25 @@ end
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initial_state((
-    t_final, dt, roll, pitch, yaw, 
-    p, q, r, kp, ki, kd, L, 
-    Ixx, Iyy, Izz, m, kf, km,
+function initialize_sim((
+    t_final,
+    dt,
+    roll,
+    pitch,
+    yaw,
+    p,
+    q,
+    r,
+    kp,
+    ki,
+    kd,
+    L,
+    Ixx,
+    Iyy,
+    Izz,
+    m,
+    kf,
+    km,
 ))
     # Define the names of all the states to save into the df
     # Extract initial states from input
@@ -431,7 +582,7 @@ function initial_state((
         m = m,
         kf = kf,
         km = km,
-        I_diag = SVector(Ixx, Iyy, Izz)
+        I_diag = SVector(Ixx, Iyy, Izz),
     )
     return t_final, dt, x0, params, state_names
 end
@@ -439,22 +590,47 @@ end
 function quadcopter_simulation((t_final, dt, x0, params, state_names))
     @info "Running Simulation"
     # run sim with RK4
-    rk4_simulation(attitude_dynamics!, x0; t_final=t_final, dt=dt, params=params, state_names=state_names)
+    rk4_simulation(
+        attitude_dynamics!,
+        x0;
+        t_final = t_final,
+        dt = dt,
+        params = params,
+        state_names = state_names,
+    )
 end
 
 # --- Main execution ---
 function main()
-    app = initialize_dashboard("Quadcopter Attitude Stabilizer"; interfaces=quadcopter_interfaces())
+    app = initialize_dashboard(
+        "Quadcopter Attitude Stabilizer";
+        interfaces = quadcopter_interfaces(),
+    )
     set_callbacks!(
         app,
-        initial_state, # Convert Control panel to initial state
+        initialize_sim, # Convert Control panel to initial state and params
         quadcopter_simulation, # Use RK4 to simulate
         Dict("main_view" => animate_quadcopter), # Render vizuals
         [
-            "t_final", "dt", "roll", "pitch", "yaw", 
-            "p", "q", "r", "Kp", "Ki", "Kd", "L",
-            "Ixx", "Iyy", "Izz", "m", "Kf", "Km",
-        ]
+            "t_final",
+            "dt",
+            "roll",
+            "pitch",
+            "yaw",
+            "p",
+            "q",
+            "r",
+            "Kp",
+            "Ki",
+            "Kd",
+            "L",
+            "Ixx",
+            "Iyy",
+            "Izz",
+            "m",
+            "Kf",
+            "Km",
+        ],
     )
     run_server(app, "127.0.0.1", 8050)
 end

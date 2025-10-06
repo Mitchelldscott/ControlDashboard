@@ -8,18 +8,23 @@ using ControlDashboard.ControlPanel
         comps = [
             Dict("component"=>"input", "label"=>"Initial Roll (deg)", "id"=>"roll"),
             Dict("component"=>"slider", "label"=>"Pitch Angle", "id"=>"pitch"),
-            Dict("component"=>"dropdown", "label"=>"Flight Mode", "id"=>"mode",
-                "options"=>[Dict("label"=>"Stabilize", "value"=>"stabilize"),
-                            Dict("label"=>"Acro", "value"=>"acro"),
-                            Dict("label"=>"Loiter", "value"=>"loiter")],
-                "value"=>"stabilize"
-            )
+            Dict(
+                "component"=>"dropdown",
+                "label"=>"Flight Mode",
+                "id"=>"mode",
+                "options"=>[
+                    Dict("label"=>"Stabilize", "value"=>"stabilize"),
+                    Dict("label"=>"Acro", "value"=>"acro"),
+                    Dict("label"=>"Loiter", "value"=>"loiter"),
+                ],
+                "value"=>"stabilize",
+            ),
         ]
         out = make_panel(comps)
         @test length(out) == 3
         # Test Input
         @test out[1].children[2].id == "roll"
-        
+
         # Test Slider
         @test out[2].children[2].id == "pitch"
 
@@ -34,15 +39,31 @@ using ControlDashboard.ControlPanel
     # --- Test 2: input, slider and dropdown array ---
     @testset "input, slider and dropdown array" begin
         comps = [
-            Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,1)),
-            Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,2)),
-            Dict("component"=>"slider", "label"=>"Yaw", "id"=>"yaw", "min"=>-180, "max"=>180, "step"=>5, "position"=>(2,1)),
-            Dict("component"=>"dropdown", "label"=>"Throttle Mode", "id"=>"throttle_mode",
-                "options"=>[Dict("label"=>"Auto","value"=>"auto"),Dict("label"=>"Manual","value"=>"manual")],
-                "value"=>"auto", "position"=>(2,2))
+            Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1, 1)),
+            Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1, 2)),
+            Dict(
+                "component"=>"slider",
+                "label"=>"Yaw",
+                "id"=>"yaw",
+                "min"=>-180,
+                "max"=>180,
+                "step"=>5,
+                "position"=>(2, 1),
+            ),
+            Dict(
+                "component"=>"dropdown",
+                "label"=>"Throttle Mode",
+                "id"=>"throttle_mode",
+                "options"=>[
+                    Dict("label"=>"Auto", "value"=>"auto"),
+                    Dict("label"=>"Manual", "value"=>"manual"),
+                ],
+                "value"=>"auto",
+                "position"=>(2, 2),
+            ),
         ]
         # a single container component
-        grid = make_panel(comps; shape=(2,2))
+        grid = make_panel(comps; shape = (2, 2))
 
         # The result 'grid' is an Array containing two sub Arrays.
         @test grid isa Vector
@@ -53,7 +74,7 @@ using ControlDashboard.ControlPanel
         row2 = grid[2]
         @test row1 isa Component
         @test row2 isa Component
-        
+
         # Now, test the children of the container.
         @test length(row1.children) == 2
         @test length(row2.children) == 2
@@ -83,7 +104,7 @@ using ControlDashboard.ControlPanel
         @test yaw_slider.step == 5
     end
 
-        # Test structs
+    # Test structs
     struct TestParams
         a::Int
         b::Bool
@@ -97,8 +118,8 @@ using ControlDashboard.ControlPanel
     end
 
     @testset "Control panel from struct tests" begin
-        params = TestParams(42, true, "hello", [1,2,3])
-        
+        params = TestParams(42, true, "hello", [1, 2, 3])
+
         panel = make_control_panel(params)
 
         @test length(panel) == 4
@@ -110,13 +131,13 @@ using ControlDashboard.ControlPanel
         @test panel[3].children[2].type == "text"
         @test panel[4].children[2].id == "d"
         @test panel[4].children[2].options == [
-            Dict("label" => "1", "value" => "1"), 
-            Dict("label" => "2", "value" => "2"), 
-            Dict("label" => "3", "value" => "3")
+            Dict("label" => "1", "value" => "1"),
+            Dict("label" => "2", "value" => "2"),
+            Dict("label" => "3", "value" => "3"),
         ]
-        
+
         # Test custom shape
-        panel2 = make_control_panel(params; shape=(2,2))
+        panel2 = make_control_panel(params; shape = (2, 2))
         @test length(panel2) == 2
         @test length(panel2[1].children) == 2
         @test length(panel2[1].children[1].children) == 2
@@ -124,14 +145,14 @@ using ControlDashboard.ControlPanel
         @test panel2[1].children[2].children[2].id == "b"
         @test panel2[2].children[1].children[2].id == "c"
         @test panel2[2].children[2].children[2].id == "d"
-        
+
         # Test fewer fields than shape
         small = SmallStruct(10, false)
-        panel3 = make_control_panel(small; shape=(2,1))
+        panel3 = make_control_panel(small; shape = (2, 1))
         @test length(panel3) == 2
         @test panel3[1].children[1].children[2].id == "x"
         @test panel3[2].children[1].children[2].id == "y"
-        
+
         # Test empty shape defaults
         panel4 = make_control_panel(small)
         @test length(panel4) == 2

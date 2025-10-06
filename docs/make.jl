@@ -1,7 +1,9 @@
-using Pkg; Pkg.develop(path = "."); Pkg.instantiate()
+using Pkg;
+Pkg.develop(path = ".");
+Pkg.instantiate()
 
 using Documenter
-using ControlDashboard 
+using ControlDashboard
 
 # 1. Define the build settings for the documentation.
 # The `modules` keyword tells Documenter which modules to analyze for docstrings.
@@ -10,7 +12,7 @@ makedocs(
     modules = [ControlDashboard],
     sitename = "ControlDashboard.jl Documentation",
     authors = "Mitchell D Scott",
-    clean = true, 
+    clean = true,
     format = Documenter.HTML(
         # Set prettyurls=true for nice URLs when hosted (e.g., on GitHub Pages)
         prettyurls = get(ENV, "CI", "false") == "false",
@@ -20,7 +22,7 @@ makedocs(
         "Home" => "index.md",
         "Examples" => "examples.md",
         "API Reference" => "api.md",
-    ]
+    ],
 )
 
 deploydocs(
