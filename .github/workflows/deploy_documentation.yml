@@ -7,12 +7,13 @@ on:
     branches: [master]
 
 permissions:
-  actions: write
-  contents: read
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
-    name: Deploy documentation
+    name: Build Documentation
     runs-on: ubuntu-latest
 
     steps:
@@ -52,6 +53,7 @@ jobs:
 
   # Deployment job
   deploy:
+    name: Deploy Documentation
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

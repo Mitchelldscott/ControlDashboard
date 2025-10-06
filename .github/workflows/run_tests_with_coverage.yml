@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test:
-    name: Testing Julia ${{ matrix.version }}
+    name: Julia ${{ matrix.version }} Test Suite
     runs-on: ubuntu-latest
     
     strategy:
@@ -40,7 +40,7 @@ jobs:
         run: julia --project=. test/CodeCoverage.jl
 
       - name: Upload coverage to Codecov
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ github.ref == 'refs/heads/master' }}
         uses: codecov/codecov-action@v5
         with:
           files: "lcov.info"
