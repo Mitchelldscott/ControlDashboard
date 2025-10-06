@@ -82,4 +82,60 @@ using ControlDashboard.ControlPanel
         @test yaw_slider.max == 180
         @test yaw_slider.step == 5
     end
+
+        # Test structs
+    struct TestParams
+        a::Int
+        b::Bool
+        c::String
+        d::Vector{Int}
+    end
+
+    struct SmallStruct
+        x::Int
+        y::Bool
+    end
+
+    @testset "Control panel from struct tests" begin
+        params = TestParams(42, true, "hello", [1,2,3])
+        
+        panel = make_control_panel(params)
+
+        @test length(panel) == 4
+        @test length(panel[1].children) == 2
+        @test panel[1].children[2].id == "a"
+        @test panel[1].children[2].type == "number"
+        @test panel[2].children[2].id == "b"
+        @test panel[3].children[2].id == "c"
+        @test panel[3].children[2].type == "text"
+        @test panel[4].children[2].id == "d"
+        @test panel[4].children[2].options == [
+            Dict("label" => "1", "value" => "1"), 
+            Dict("label" => "2", "value" => "2"), 
+            Dict("label" => "3", "value" => "3")
+        ]
+        
+        # Test custom shape
+        panel2 = make_control_panel(params; shape=(2,2))
+        @test length(panel2) == 2
+        @test length(panel2[1].children) == 2
+        @test length(panel2[1].children[1].children) == 2
+        @test panel2[1].children[1].children[2].id == "a"
+        @test panel2[1].children[2].children[2].id == "b"
+        @test panel2[2].children[1].children[2].id == "c"
+        @test panel2[2].children[2].children[2].id == "d"
+        
+        # Test fewer fields than shape
+        small = SmallStruct(10, false)
+        panel3 = make_control_panel(small; shape=(2,1))
+        @test length(panel3) == 2
+        @test panel3[1].children[1].children[2].id == "x"
+        @test panel3[2].children[1].children[2].id == "y"
+        
+        # Test empty shape defaults
+        panel4 = make_control_panel(small)
+        @test length(panel4) == 2
+        @test panel4[1].children[2].id == "x"
+        @test panel4[2].children[2].id == "y"
+    end
 end

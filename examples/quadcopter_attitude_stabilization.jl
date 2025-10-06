@@ -374,23 +374,33 @@ end
 function quadcopter_interfaces()
     return make_panel([
         Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "value"=>10.0, "position"=>(1,1)),
-        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "value"=>0.1, "position"=>(2,1)),
-        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1,2)),
-        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1,3)),
-        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1,4)),
-        Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2,2)),
-        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2,3)),
-        Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2,4)),
+        Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "value"=>0.2, "position"=>(2,1)),
+
+        # Initial attitude (slightly tilted to make motion interesting)
+        Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "value"=>5.0, "position"=>(1,2)),      # degrees
+        Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "value"=>-15.0, "position"=>(1,3)),  # degrees
+        Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "value"=>45.0, "position"=>(1,4)),      # degrees
+
+        # Initial angular rates (small rotation to start)
+        Dict("component"=>"input", "label"=>"P", "id"=>"p", "value"=>0.2, "position"=>(2,2)),
+        Dict("component"=>"input", "label"=>"Q", "id"=>"q", "value"=>-0.25, "position"=>(2,3)),
+        Dict("component"=>"input", "label"=>"R", "id"=>"r", "value"=>1.0, "position"=>(2,4)),
+
+        # PID controller (moderate tuning for demo stability)
         Dict("component"=>"input", "label"=>"Kp", "id"=>"Kp", "value"=>0.1, "position"=>(3,1)),
         Dict("component"=>"input", "label"=>"Ki", "id"=>"Ki", "value"=>0.0, "position"=>(3,2)),
         Dict("component"=>"input", "label"=>"Kd", "id"=>"Kd", "value"=>0.05, "position"=>(3,3)),
-        Dict("component"=>"input", "label"=>"wing length", "id"=>"L", "value"=>1e-2, "position"=>(3,4)),
-        Dict("component"=>"input", "label"=>"Ixx", "id"=>"Ixx", "value"=>1e-3, "position"=>(1,5)),
-        Dict("component"=>"input", "label"=>"Iyy", "id"=>"Iyy", "value"=>1e-3, "position"=>(2,5)),
-        Dict("component"=>"input", "label"=>"Izz", "id"=>"Izz", "value"=>2e-3, "position"=>(3,5)),
-        Dict("component"=>"input", "label"=>"Mass", "id"=>"m", "value"=>0.5, "position"=>(1,6)),
-        Dict("component"=>"input", "label"=>"Thrust coeff", "id"=>"Kf", "value"=>1e-5, "position"=>(2,6)),
-        Dict("component"=>"input", "label"=>"Drag Coeff", "id"=>"Km", "value"=>2e-5, "position"=>(3,6)),
+
+        # Geometry and inertial properties
+        Dict("component"=>"input", "label"=>"Arm length", "id"=>"L", "value"=>0.22, "position"=>(3,4)), # meters
+        Dict("component"=>"input", "label"=>"Ixx", "id"=>"Ixx", "value"=>6.8e-3, "position"=>(1,5)),
+        Dict("component"=>"input", "label"=>"Iyy", "id"=>"Iyy", "value"=>9.2e-3, "position"=>(2,5)),
+        Dict("component"=>"input", "label"=>"Izz", "id"=>"Izz", "value"=>1.35e-2, "position"=>(3,5)),
+
+        # Physical parameters
+        Dict("component"=>"input", "label"=>"Mass", "id"=>"m", "value"=>0.48, "position"=>(1,6)),
+        Dict("component"=>"input", "label"=>"Thrust Coeff", "id"=>"Kf", "value"=>6e-5, "position"=>(2,6)),
+        Dict("component"=>"input", "label"=>"Drag Coeff", "id"=>"Km", "value"=>1.5e-6, "position"=>(3,6))
     ]; shape=(3,6), panel_style=Dict(
         "display" => "flex",
         "alignItems" => "center"
@@ -411,7 +421,7 @@ function initial_state((
     # Define the names of all the states to save into the df
     # Extract initial states from input
     state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
-    x0 = [roll, pitch, yaw, p, q, r]
+    x0 = [deg2rad(roll), deg2rad(pitch), deg2rad(yaw), p, q, r]
     # Define parameters (p).
     params = QuadcopterParams(;
         kp = kp,

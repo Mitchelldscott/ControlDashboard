@@ -2,7 +2,7 @@ module ControlPanel
     
     using Dash
 
-    export make_panel, build_component, sample_time_and_duration_sliders
+    export make_control_panel, make_panel, build_component, sample_time_and_duration_sliders
 
     """
         build_component(config::Dict; component_style::Dict=Dict())
@@ -87,7 +87,7 @@ module ControlPanel
                 id=compid,
                 type=get(config,"type","number"),
                 value=get(config,"value",0.0),
-                step=get(config,"step",1e-5),
+                step=get(config,"step", 1e-7),
                 debounce=get(config,"debounce",true),
                 inputMode=get(config,"inputmode","numeric"),
                 min=get(config,"min",nothing),
@@ -116,6 +116,13 @@ module ControlPanel
                 clearable=get(config,"clearable",true),
                 searchable=get(config,"searchable",true),
                 multi=get(config,"multi",false),
+                style=Dict("width"=>"160px")
+            )
+        elseif ctype == "checkbox"
+            component = dcc_checklist(
+                id=compid,
+                options=get(config,"options",[]),
+                value=get(config,"value",""),
                 style=Dict("width"=>"160px")
             )
         else
@@ -193,6 +200,129 @@ module ControlPanel
             end
             return rows
         end
+    end
+
+    """
+        infer_field_type!(config::Dict, val::Any) -> Dict
+
+    Infer the type of a Dash component based on the Julia value `val`
+    and update a configuration dictionary suitable for creating that UI component.
+
+    # Arguments
+    - `config::Dict`: The configuration dictionary to modify.
+    - `val::Any`: The Julia value to infer the component type from.
+
+    # Returns
+    - `config::Dict`: The modified configuration dictionary.
+
+    # Behavior
+    - `Bool` → `dcc_checkbox` with the `checked` property.
+    - `Number` → `dcc_input` with `type="number"`.
+    - `AbstractString` or `Symbol` → `dcc_input` with `type="text"`.
+    - `AbstractVector` → `dcc_dropdown` with `options`.
+    - `Enum` → `slider` with all enum instances as `marks`.
+    - Any other type → `dcc_input` with `type="text"` as a fallback.
+    """
+    function infer_field_type!(config::Dict, val)
+        # Set the default value unless overridden by a more specific case
+        config["value"] = val
+
+        if isa(val, Bool)
+            config["component"] = "checkbox"
+            # For a dcc_checkbox, the state is controlled by `checked`, not `value`.
+            config["checked"] = val
+            delete!(config, "value") # Remove the generic 'value' key
+
+        elseif isa(val, Number)
+            config["component"] = "input"
+            config["type"] = "number"
+
+        elseif isa(val, AbstractString)
+            config["component"] = "input"
+            config["type"] = "text"
+
+        elseif isa(val, Symbol)
+            config["component"] = "input"
+            config["type"] = "text"
+            config["value"] = string(val) # Convert symbol to string for display
+
+        elseif isa(val, AbstractVector)
+            # Use a dropdown for a vector of strings or symbols
+            config["component"] = "dropdown"
+            config["options"] = [Dict("label" => string(o), "value" => string(o)) for o in val]
+            config["value"] = isempty(val) ? nothing : string(first(val))
+
+        elseif isa(val, Enum)
+            # Use a dropdown for an Enum type
+            instances_list = instances(typeof(val))
+            config["component"] = "slider"
+            config["options"] = [Dict("label" => i, "value" => string(e)) for (i, e) in enumerate(instances_list)]
+            config["value"] = string(val)
+
+        else
+            # Fallback for any other type
+            config["component"] = "input"
+            config["type"] = "text"
+            config["value"] = string(val)
+        end
+
+        return config
+    end
+
+    """
+        make_control_panel(params_struct::T; shape=nothing, component_style=Dict(), panel_style=Dict()) where {T}
+
+    Construct a 2D Dash control panel from a struct instance.
+
+    The function iterates through the fields of `params_struct`, creating a UI
+    component (a `dcc_input` box) for each field.
+
+    # Arguments
+    - `params_struct`: An instance of a Julia struct.
+    - `shape`: An optional `(rows, cols)` tuple to arrange the components in a grid.
+            If not provided, it defaults to a single column.
+    - `component_style`, `panel_style`: Optional CSS style dictionaries passed to `make_panel`.
+
+    # Returns
+    - A `Vector` of `html_div` components representing the panel.
+    """
+    function make_control_panel(params_struct::T;
+                                shape=nothing,
+                                component_style=Dict(),
+                                panel_style=Dict()) where {T}
+        configs = Vector{Dict}()
+        names = fieldnames(T)
+        num_fields = length(names)
+
+        # Default to a single column layout if no shape is provided
+        final_shape = (shape === nothing) ? (1, num_fields) : shape
+        nrows, ncols = final_shape
+
+        # Check if the requested shape can hold all fields
+        if num_fields > nrows * ncols
+            @warn "Shape ($nrows, $ncols) is too small for $num_fields fields. Some parameters will not be shown."
+        end
+
+        for (i, name) in enumerate(names)
+            val = getfield(params_struct, name)
+
+            # Assign grid position based on row-major order
+            row_pos = div(i - 1, ncols) + 1
+            col_pos = mod(i - 1, ncols) + 1
+
+            # Create the configuration dictionary for the component
+            config = Dict(
+                "id"        => String(name),
+                "label"     => titlecase(String(name)),
+                "value"     => val,
+                "position" => (row_pos, col_pos)
+            )
+            infer_field_type!(config, val)
+            push!(configs, config)
+        end
+
+        # Use the provided `make_panel` function to build the final layout
+        return make_panel(configs; shape=final_shape, component_style=component_style, panel_style=panel_style)
     end
 
     """
