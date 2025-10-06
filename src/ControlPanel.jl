@@ -2,7 +2,7 @@ module ControlPanel
 
 using Dash
 
-export make_control_panel, make_panel, build_component, sample_time_and_duration_sliders
+export make_control_panel, make_panel, build_component,  get_component_ids, sample_time_and_duration_sliders
 
 """
     build_component(config::Dict; component_style::Dict=Dict())
@@ -350,6 +350,36 @@ function sample_time_and_duration_sliders(component_style = Dict(), panel_style 
         Dict("component"=>"input", "label"=>"Sample Time", "id"=>"dt"),
         Dict("component"=>"input", "label"=>"Duration", "id"=>"t"),
     ]
-    make_panel(comps; component_style = component_style, panel_style = panel_style)
+    return make_panel(comps; component_style = component_style, panel_style = panel_style)
+end
+
+
+"""
+    get_component_ids(panel::Vector)
+
+Extract all component IDs from elements in a control panel.
+
+Traverses each element recursively and collects the `"id"` field from any
+component that defines one.
+
+# Example
+```julia
+ids = get_component_ids(make_control_panel(quadcopter_interfaces()))
+'''
+"""
+function get_component_ids(panel::Vector)
+    ids = String[]
+    for elem in panel
+        if elem isa Component
+            if hasproperty(elem, :children)
+                child_ids = get_component_ids(collect(Iterators.flatten([elem.children])))
+                append!(ids, child_ids)
+            elseif hasproperty(elem, :id) && !isempty(elem.id)
+                push!(ids, String(elem.id))
+            end
+        end
+        
+    end
+    return unique(ids)
 end
 end # module

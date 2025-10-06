@@ -1,4 +1,4 @@
-using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
+using Test, Dash, ControlDashboard, ControlDashboard.ControlPanel, DifferentialEquations, StaticArrays, DataFrames
 
 @testset "ControlDashboard tests" begin
 
