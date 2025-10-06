@@ -1,13 +1,15 @@
-name: CI
+name: Documentation Deployment Pipeline
 
 on:
   push:
     branches: [master]
+    paths-ignore: [".github/workflows/run_tests_with_coverage.yml", "test/**", "examples/**", ".gitignore", "LICENSE", "README.md"]
   pull_request:
     branches: [master]
 
 permissions:
-  contents: write
+  actions: write
+  contents: read
   pages: write
   id-token: write
 

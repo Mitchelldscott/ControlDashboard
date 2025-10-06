@@ -1,8 +1,9 @@
-name: CI
+name: Tests and Coverage Pipeline
 
 on:
   push:
     branches: [master]
+    paths-ignore: [".github/workflows/deploy_documentation.yml", "docs/**", "examples/**", ".gitignore", "LICENSE", "README.md"]
   pull_request:
     branches: [master]
 
