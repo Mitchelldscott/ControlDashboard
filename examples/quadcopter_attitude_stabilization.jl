@@ -1,23 +1,21 @@
 using Dash,
     DataFrames,
     PlotlyJS,
+    StaticArrays,
     LinearAlgebra,
     DifferentialEquations,
     ControlDashboard,
-    ControlDashboard.ControlPanel
-using StaticArrays # Added for performance, standard practice in Julia rigid body dynamics [6, 7]
+    ControlDashboard.ControlPanel 
 
-# # Constants defined in the user's snippet
-# const I = Diagonal([0.01, 0.01, 0.02])  # kg·m²
-# const invI = inv(I)
-
-# # --- More Accurate Dynamics Constants (Derived from sources for typical quadrotor models) ---
-# # We define these constants globally for use in the simulation setup.
-# const J_ROTOR = 3.357e-5 # kg m^2 (Rotor inertia, Jr) [8]
-# const AR_DRAG = 0.0001 # Placeholder for aerodynamic resistance (Ar) [3]
-
-
-struct QuadcopterParams
+struct QuadcopterSimParameters
+    t_final::Floatf64            # Length of the simulation [s]
+    dt::Floatf64                 # Sampling time of the simulation [s]
+    roll::Floatf64               # Rotation about the x-axis [deg]
+    pitch::Floatf64              # Rotation about the y-axis [deg]
+    yaw::Floatf64                # Rotation about the z-axis [deg]
+    p::Floatf64                  # Angular Rate about the x-axis [rad/s]
+    q::Floatf64                  # Angular Rate about the y-axis [rad/s]
+    r::Floatf64                  # Angular Rate about the z-axis [rad/s]
     I_diag::SVector{3,Float64}   # Diagonal inertia [kg·m^2]
     J_r::Float64                 # Rotor inertia [kg·m^2]
     Ar::Float64                  # Aerodynamic drag coefficient
@@ -33,7 +31,15 @@ struct QuadcopterParams
     P_body::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
     spin_dirs::SVector{4,Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
 
-    function QuadcopterParams(;
+    function QuadcopterSimParameters(;
+        t_final = 10.0,
+        dt = 0.1,
+        roll = 15,
+        pitch = 15,
+        yaw = 45,
+        p = 0.2,
+        q = 0.2,
+        r = 2.0,
         I_diag = SVector(1e-3, 1e-3, 2e-3),
         J_r = 6e-5,
         Ar = 1e-6,
@@ -163,7 +169,7 @@ dynamics simulation to determine how the motor outputs affect the vehicle's stat
 # Arguments
 - `w_sq` :: `NTuple{4, Float64}`
     A tuple of the squared angular velocities `(w1^2, w2^2, w3^2, w4^2)`.
-- `params` :: `QuadcopterParams`
+- `params` :: `QuadcopterSimParameters`
     A struct containing the quadcopter's physical parameters (`L`, `kf`, `km`).
 
 # Returns
@@ -281,7 +287,7 @@ function relative_motor_positions(φ, θ, ψ, P_body)
 end
 
 """
-    animate_quadcopter(df::DataFrame; params=QuadcopterParams(), template="plotly_dark", frame_duration=50)
+    animate_quadcopter(df::DataFrame; params=QuadcopterSimParameters(), template="plotly_dark", frame_duration=50)
 
 Build a PlotlyJS animation from a DataFrame `df` that must have columns:
   :time, :roll, :pitch, :yaw
@@ -293,7 +299,7 @@ Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
 function animate_quadcopter(
     df;
-    params = QuadcopterParams(),
+    params = QuadcopterSimParameters(),
     template = "plotly_dark",
     frame_duration = 50,
 )
@@ -399,145 +405,8 @@ end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
-    return make_panel(
-        [
-            Dict(
-                "component"=>"input",
-                "label"=>"Duration",
-                "id"=>"t_final",
-                "value"=>10.0,
-                "position"=>(1, 1),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Sample time",
-                "id"=>"dt",
-                "value"=>0.2,
-                "position"=>(2, 1),
-            ),
-
-            # Initial attitude (slightly tilted to make motion interesting)
-            Dict(
-                "component"=>"input",
-                "label"=>"Roll",
-                "id"=>"roll",
-                "value"=>5.0,
-                "position"=>(1, 2),
-            ),      # degrees
-            Dict(
-                "component"=>"input",
-                "label"=>"Pitch",
-                "id"=>"pitch",
-                "value"=>-15.0,
-                "position"=>(1, 3),
-            ),  # degrees
-            Dict(
-                "component"=>"input",
-                "label"=>"Yaw",
-                "id"=>"yaw",
-                "value"=>45.0,
-                "position"=>(1, 4),
-            ),      # degrees
-
-            # Initial angular rates (small rotation to start)
-            Dict(
-                "component"=>"input",
-                "label"=>"P",
-                "id"=>"p",
-                "value"=>0.2,
-                "position"=>(2, 2),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Q",
-                "id"=>"q",
-                "value"=>-0.25,
-                "position"=>(2, 3),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"R",
-                "id"=>"r",
-                "value"=>1.0,
-                "position"=>(2, 4),
-            ),
-
-            # PID controller (moderate tuning for demo stability)
-            Dict(
-                "component"=>"input",
-                "label"=>"Kp",
-                "id"=>"Kp",
-                "value"=>0.1,
-                "position"=>(3, 1),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Ki",
-                "id"=>"Ki",
-                "value"=>0.0,
-                "position"=>(3, 2),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Kd",
-                "id"=>"Kd",
-                "value"=>0.05,
-                "position"=>(3, 3),
-            ),
-
-            # Geometry and inertial properties
-            Dict(
-                "component"=>"input",
-                "label"=>"Arm length",
-                "id"=>"L",
-                "value"=>0.22,
-                "position"=>(3, 4),
-            ), # meters
-            Dict(
-                "component"=>"input",
-                "label"=>"Ixx",
-                "id"=>"Ixx",
-                "value"=>6.8e-3,
-                "position"=>(1, 5),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Iyy",
-                "id"=>"Iyy",
-                "value"=>9.2e-3,
-                "position"=>(2, 5),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Izz",
-                "id"=>"Izz",
-                "value"=>1.35e-2,
-                "position"=>(3, 5),
-            ),
-
-            # Physical parameters
-            Dict(
-                "component"=>"input",
-                "label"=>"Mass",
-                "id"=>"m",
-                "value"=>0.48,
-                "position"=>(1, 6),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Thrust Coeff",
-                "id"=>"Kf",
-                "value"=>6e-5,
-                "position"=>(2, 6),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Drag Coeff",
-                "id"=>"Km",
-                "value"=>1.5e-6,
-                "position"=>(3, 6),
-            ),
-        ];
+    return make_control_panel(
+        QuadcopterSimParameters();
         shape = (3, 6),
         panel_style = Dict("display" => "flex", "alignItems" => "center"),
     )
@@ -549,52 +418,24 @@ end
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initialize_sim((
-    t_final,
-    dt,
-    roll,
-    pitch,
-    yaw,
-    p,
-    q,
-    r,
-    kp,
-    ki,
-    kd,
-    L,
-    Ixx,
-    Iyy,
-    Izz,
-    m,
-    kf,
-    km,
-))
+function initialize_sim(params)
+    params = QuadcopterSimParameters(;params)
     # Define the names of all the states to save into the df
     # Extract initial states from input
     state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
-    x0 = [deg2rad(roll), deg2rad(pitch), deg2rad(yaw), p, q, r]
-    # Define parameters (p).
-    params = QuadcopterParams(;
-        kp = kp,
-        ki = ki,
-        kd = kd,
-        L = L,
-        m = m,
-        kf = kf,
-        km = km,
-        I_diag = SVector(Ixx, Iyy, Izz),
-    )
-    return t_final, dt, x0, params, state_names
+    x0 = [deg2rad(params.roll), deg2rad(params.pitch), deg2rad(params.yaw), params.p, params.q, params.r]
+
+    return params, state_names, x0
 end
 
-function quadcopter_simulation((t_final, dt, x0, params, state_names))
+function quadcopter_simulation((params, state_names, x0))
     @info "Running Simulation"
     # run sim with RK4
     rk4_simulation(
         attitude_dynamics!,
         x0;
-        t_final = t_final,
-        dt = dt,
+        t_final = params.t_final,
+        dt = params.dt,
         params = params,
         state_names = state_names,
     )
@@ -602,37 +443,13 @@ end
 
 # --- Main execution ---
 function main()
-    app = initialize_dashboard(
-        "Quadcopter Attitude Stabilizer";
-        interfaces = quadcopter_interfaces(),
+    run_dashboard(
+        quadcopter_interfaces(),
+        initialize_sim,
+        quadcopter_simulation,
+        Dict("main_view" => animate_quadcopter);
+        title = "Quadcopter Attitude Stabilizer",
     )
-    set_callbacks!(
-        app,
-        initialize_sim, # Convert Control panel to initial state and params
-        quadcopter_simulation, # Use RK4 to simulate
-        Dict("main_view" => animate_quadcopter), # Render vizuals
-        [
-            "t_final",
-            "dt",
-            "roll",
-            "pitch",
-            "yaw",
-            "p",
-            "q",
-            "r",
-            "Kp",
-            "Ki",
-            "Kd",
-            "L",
-            "Ixx",
-            "Iyy",
-            "Izz",
-            "m",
-            "Kf",
-            "Km",
-        ],
-    )
-    run_server(app, "127.0.0.1", 8050)
 end
 
 main()
