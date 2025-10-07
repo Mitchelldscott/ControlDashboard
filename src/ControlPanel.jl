@@ -2,7 +2,8 @@ module ControlPanel
 
 using Dash
 
-export make_control_panel, make_panel, build_component,  get_component_ids, sample_time_and_duration_sliders
+export make_control_panel, make_panel, build_component, 
+    get_component_ids, sample_time_and_duration_sliders
 
 """
     build_component(config::Dict; component_style::Dict=Dict())
@@ -78,58 +79,10 @@ function build_component(config::Dict, component_style = Dict())
     label = get(config, "label", "")
     compid = get(config, "id", "")
 
-    component = nothing
-    if ctype == "input"
-        component = dcc_input(
-            id = compid,
-            type = get(config, "type", "number"),
-            value = get(config, "value", 0.0),
-            step = get(config, "step", 1e-7),
-            debounce = get(config, "debounce", true),
-            inputMode = get(config, "inputmode", "numeric"),
-            min = get(config, "min", nothing),
-            max = get(config, "max", nothing),
-            style = Dict("width"=>"140px"),
-        )
-    elseif ctype == "slider"
-        range = get(config, "max", 1.0) - get(config, "min", 0.0)
-        if range < 0
-            error("Slider Range must be greater than zero")
-        end
+    # Dispatch based on the component type string, using Val(Symbol(ctype))
+    component = build_component_ui(Val(Symbol(ctype)), config, compid)
 
-        marks = Dict(
-            string(i)=>i for i = get(config, "min", 0.0):(range/5):get(config, "max", 1.0)
-        )
-        component = dcc_slider(
-            id = compid,
-            min = get(config, "min", 0.0),
-            max = get(config, "max", 1.0),
-            step = get(config, "step", 0.1),
-            value = get(config, "value", get(config, "min", 0.0)),
-            marks = get(config, "marks", marks),
-            tooltip = Dict("always_visible"=>true),
-        )
-    elseif ctype == "dropdown"
-        component = dcc_dropdown(
-            id = compid,
-            options = get(config, "options", []),
-            value = get(config, "value", ""),
-            clearable = get(config, "clearable", true),
-            searchable = get(config, "searchable", true),
-            multi = get(config, "multi", false),
-            style = Dict("width"=>"160px"),
-        )
-    elseif ctype == "checkbox"
-        component = dcc_checklist(
-            id = compid,
-            options = get(config, "options", []),
-            value = get(config, "value", ""),
-            style = Dict("width"=>"160px"),
-        )
-    else
-        error("Unknown component type: $ctype")
-    end
-
+    # Common wrapper logic
     return html_div(
         [
             html_label(
@@ -144,6 +97,100 @@ function build_component(config::Dict, component_style = Dict())
             component,
         ],
         style = component_style,
+    )
+end
+
+# --- Specific Component Builders using Multiple Dispatch ---
+# Note: dcc_input, dcc_slider, etc., and html_div, html_label are assumed to be defined by Dash
+
+# Fallback method for unknown component types
+function build_component_ui(::Val{S}, config::Dict, compid::AbstractString) where S
+    error("Unknown component type: $S")
+end
+
+# 1. Input Component (Dispatches on ::Val{:input})
+function build_component_ui(::Val{:input}, config::Dict, compid::AbstractString)
+    return dcc_input(
+        id = compid,
+        type = get(config, "type", "number"),
+        value = get(config, "value", 0.0),
+        step = get(config, "step", 1e-7),
+        debounce = get(config, "debounce", true),
+        inputMode = get(config, "inputmode", "numeric"),
+        min = get(config, "min", nothing),
+        max = get(config, "max", nothing),
+        style = Dict("width"=>"140px"),
+    )
+end
+
+# 2. Slider Component (Dispatches on ::Val{:slider})
+function build_component_ui(::Val{:slider}, config::Dict, compid::AbstractString)
+    min_val = get(config, "min", 0.0)
+    max_val = get(config, "max", 1.0)
+    range = max_val - min_val
+
+    if range < 0
+        error("Slider Range must be greater than zero")
+    end
+
+    # Calculate default marks if none are provided
+    marks = get(config, "marks", Dict(
+        string(i)=>i for i = min_val:(range/5):max_val
+    ))
+
+    return dcc_slider(
+        id = compid,
+        min = min_val,
+        max = max_val,
+        step = get(config, "step", 0.1),
+        value = get(config, "value", min_val),
+        marks = marks,
+        tooltip = Dict("always_visible"=>true),
+    )
+end
+
+# 3. Dropdown Component (Dispatches on ::Val{:dropdown})
+function build_component_ui(::Val{:dropdown}, config::Dict, compid::AbstractString)
+    return dcc_dropdown(
+        id = compid,
+        options = get(config, "options", []),
+        value = get(config, "value", ""),
+        clearable = get(config, "clearable", true),
+        searchable = get(config, "searchable", true),
+        multi = get(config, "multi", false),
+        style = Dict("width"=>"160px"),
+    )
+end
+
+# 4. Checkbox Component (Dispatches on ::Val{:checkbox})
+function build_component_ui(::Val{:checkbox}, config::Dict, compid::AbstractString)
+    return dcc_checklist(
+        id = compid,
+        options = get(config, "options", []),
+        value = get(config, "value", ""),
+        style = Dict("width"=>"160px"),
+    )
+end
+
+# 5. DataTable Component (Dispatches on ::Val{:datatable})
+function build_component_ui(::Val{:datatable}, config::Dict, compid::AbstractString)
+    # Assumes DataTable is the Julia Dash component function name for dash_table.DataTable
+    return dash_datatable(
+        id = compid,
+        columns = get(config, "columns", []),
+        data = get(config, "data", []),
+        editable = get(config, "editable", false),
+        filter_action = get(config, "filter_action", "none"),
+        sort_action = get(config, "sort_action", "none"),
+        sort_mode = get(config, "sort_mode", "single"),
+        column_selectable = get(config, "column_selectable", "none"),
+        row_selectable = get(config, "row_selectable", "none"),
+        row_deletable = get(config, "row_deletable", false),
+        selected_columns = get(config, "selected_columns", []),
+        selected_rows = get(config, "selected_rows", []),
+        page_action = get(config, "page_action", "none"),
+        page_current = get(config, "page_current", 0),
+        page_size = get(config, "page_size", 10),
     )
 end
 
@@ -183,17 +230,17 @@ function make_panel(
         return [build_component(config, component_style) for config in configs]
     else
         nrows, ncols = shape
-        grid = [html_div([]) for _ = 1:(nrows*ncols)]
+        contents = [html_div([]) for _ = 1:(nrows*ncols)]
         for config in configs
             pos = get(config, "position", nothing)
             if pos !== nothing
                 i, j = pos
                 idx = (i-1)*ncols + j
-                grid[idx] = build_component(config, component_style)
+                contents[idx] = build_component(config, component_style)
             else
-                empty_idx = findfirst(x -> isempty(x.children), grid)
+                empty_idx = findfirst(x -> isempty(x.children), contents)
                 if empty_idx !== nothing
-                    grid[empty_idx] = build_component(config, component_style)
+                    contents[empty_idx] = build_component(config, component_style)
                 end
             end
         end
@@ -201,79 +248,89 @@ function make_panel(
         for i = 1:nrows
             start = (i-1)*ncols + 1
             stop = i*ncols
-            push!(rows, html_div(grid[start:stop], style = panel_style))
+            push!(rows, html_div(contents[start:stop], style = panel_style))
         end
         return rows
     end
 end
 
+# The main function is now just a dispatcher
 """
     infer_field_type!(config::Dict, val::Any) -> Dict
 
 Infer the type of a Dash component based on the Julia value `val`
-and update a configuration dictionary suitable for creating that UI component.
-
-# Arguments
-- `config::Dict`: The configuration dictionary to modify.
-- `val::Any`: The Julia value to infer the component type from.
-
-# Returns
-- `config::Dict`: The modified configuration dictionary.
-
-# Behavior
-- `Bool` → `dcc_checkbox` with the `checked` property.
-- `Number` → `dcc_input` with `type="number"`.
-- `AbstractString` or `Symbol` → `dcc_input` with `type="text"`.
-- `AbstractVector` → `dcc_dropdown` with `options`.
-- `Enum` → `slider` with all enum instances as `marks`.
-- Any other type → `dcc_input` with `type="text"` as a fallback.
+and update a configuration dictionary suitable for that UI component.
 """
 function infer_field_type!(config::Dict, val)
-    # Set the default value unless overridden by a more specific case
+    set_component_config!(config, val)
+end
+
+# --- Method for Booleans ---
+function set_component_config!(config::Dict, val::Bool)
+    config["component"] = "checkbox"
+    config["checked"] = val
+end
+
+# --- Method for Numbers ---
+function set_component_config!(config::Dict, val::Number)
+    config["component"] = "input"
+    config["type"] = "number"
     config["value"] = val
+end
 
-    if isa(val, Bool)
-        config["component"] = "checkbox"
-        # For a dcc_checkbox, the state is controlled by `checked`, not `value`.
-        config["checked"] = val
-        delete!(config, "value") # Remove the generic 'value' key
+# --- Method for Strings and Symbols (combined with Union) ---
+function set_component_config!(config::Dict, val::Union{AbstractString, Symbol})
+    config["component"] = "input"
+    config["type"] = "text"
+    config["value"] = string(val) # string() works for both
+end
 
-    elseif isa(val, Number)
-        config["component"] = "input"
-        config["type"] = "number"
+# --- Method for Vectors ---
+function set_component_config!(config::Dict, val::AbstractVector)
+    config["component"] = "datatable"
+    
+    # Define the columns: a single editable column for the vector elements
+    config["columns"] = [
+        Dict(
+            "name" => "Value",
+            "id" => "Value",
+            "deletable" => true,
+            "selectable" => true,
+            "editable" => true # CRITICAL: Allows user to edit data
+        )
+    ]
 
-    elseif isa(val, AbstractString)
-        config["component"] = "input"
-        config["type"] = "text"
+    # Format the data: Convert the vector into a Vector of Dicts (list of rows)
+    # Each original vector element becomes a row under the "Value" column.
+    config["data"] = [
+        Dict("Value" => o) for o in val
+    ]
 
-    elseif isa(val, Symbol)
-        config["component"] = "input"
-        config["type"] = "text"
-        config["value"] = string(val) # Convert symbol to string for display
+    # Set up standard DataTable features
+    config["editable"] = true # Enable overall table editing
+    config["filter_action"] = "native"
+    config["sort_action"] = "native"
+    config["row_deletable"] = true
+    config["page_action"] = "native"
+    config["page_current"] = 0
+    config["page_size"] = 10
+    config["column_selectable"] = "multi"
+    config["row_selectable"] = "multi"
+end
 
-    elseif isa(val, AbstractVector)
-        # Use a dropdown for a vector of strings or symbols
-        config["component"] = "dropdown"
-        config["options"] = [Dict("label" => string(o), "value" => string(o)) for o in val]
-        config["value"] = isempty(val) ? nothing : string(first(val))
-
-    elseif isa(val, Enum)
-        # Use a dropdown for an Enum type
-        instances_list = instances(typeof(val))
-        config["component"] = "slider"
-        config["options"] = [
-            Dict("label" => i, "value" => string(e)) for (i, e) in enumerate(instances_list)
-        ]
-        config["value"] = string(val)
-
-    else
-        # Fallback for any other type
-        config["component"] = "input"
-        config["type"] = "text"
-        config["value"] = string(val)
-    end
-
-    return config
+# --- Method for Enums ---
+# Note: This is improved to correctly configure a dcc_slider
+function set_component_config!(config::Dict, val::Enum)
+    instances_list = instances(typeof(val))
+    config["component"] = "slider"
+    config["min"] = 1
+    config["max"] = length(instances_list)
+    config["step"] = 1
+    # `marks` for a slider maps a numeric value to a string label
+    config["marks"] = Dict(i => string(e) for (i, e) in enumerate(instances_list))
+    # The slider's value will be the numeric index of the enum instance
+    current_index = findfirst(isequal(val), instances_list)
+    config["value"] = current_index
 end
 
 """
@@ -309,7 +366,7 @@ function make_control_panel(
 
     # Check if the requested shape can hold all fields
     if num_fields > nrows * ncols
-        @warn "Shape ($nrows, $ncols) is too small for $num_fields fields. Some parameters will not be shown."
+        @error "Shape ($nrows, $ncols) is too small for $num_fields fields."
     end
 
     for (i, name) in enumerate(names)
@@ -350,9 +407,8 @@ function sample_time_and_duration_sliders(component_style = Dict(), panel_style 
         Dict("component"=>"input", "label"=>"Sample Time", "id"=>"dt"),
         Dict("component"=>"input", "label"=>"Duration", "id"=>"t"),
     ]
-    return make_panel(comps; component_style = component_style, panel_style = panel_style)
+    make_panel(comps; component_style = component_style, panel_style = panel_style)
 end
-
 
 """
     get_component_ids(panel::Vector)

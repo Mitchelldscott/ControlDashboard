@@ -11,7 +11,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         df = rk4_simulation(simple_dynamics!, [1.0]; t_final = 1.0, dt = 0.1, state_names=["x1"])
 
         # Check type
-        @test isa(df, DataFrame)
+        @test df isa DataFrame
 
         # Check required columns
         @test names(df) == ["time", "x1"]

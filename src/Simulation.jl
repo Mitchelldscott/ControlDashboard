@@ -18,7 +18,7 @@ This is a helper function for simulations that use DifferentialEquations.jl.
 # Returns
 - `df::DataFrame` : States and sample times extracted from a sol.
 """
-function sol_to_dataframe(sol; cols::AbstractVector = nothing)
+function sol_to_dataframe(sol; cols::AbstractVector = string[])
     arr = Array(sol)  # each column is a state, rows = time steps
     df = DataFrame(time = sol.t) # sol should always have t
     # Auto-generate names if not provided

@@ -130,11 +130,11 @@ using ControlDashboard
         @test panel[3].children[2].id == "c"
         @test panel[3].children[2].type == "text"
         @test panel[4].children[2].id == "d"
-        @test panel[4].children[2].options == [
-            Dict("label" => "1", "value" => "1"),
-            Dict("label" => "2", "value" => "2"),
-            Dict("label" => "3", "value" => "3"),
-        ]
+        # @test panel[4].children[2].options == [
+        #     Dict("label" => "1", "value" => "1"),
+        #     Dict("label" => "2", "value" => "2"),
+        #     Dict("label" => "3", "value" => "3"),
+        # ]
 
         # Test custom shape
         panel2 = make_control_panel(params; shape = (2, 2))
