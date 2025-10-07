@@ -8,14 +8,10 @@ using Dash,
     ControlDashboard.ControlPanel 
 
 struct QuadcopterSimParameters
-    t_final::Floatf64            # Length of the simulation [s]
-    dt::Floatf64                 # Sampling time of the simulation [s]
-    roll::Floatf64               # Rotation about the x-axis [deg]
-    pitch::Floatf64              # Rotation about the y-axis [deg]
-    yaw::Floatf64                # Rotation about the z-axis [deg]
-    p::Floatf64                  # Angular Rate about the x-axis [rad/s]
-    q::Floatf64                  # Angular Rate about the y-axis [rad/s]
-    r::Floatf64                  # Angular Rate about the z-axis [rad/s]
+    t_final::Float64             # Length of the simulation [s]
+    dt::Float64                  # Sampling time of the simulation [s]
+    rpy::SVector{3,Float64}      # Initial Attitude [degree]
+    pqr::SVector{3,Float64}      # Initial Angular Rates [rad/s]
     I_diag::SVector{3,Float64}   # Diagonal inertia [kg·m^2]
     J_r::Float64                 # Rotor inertia [kg·m^2]
     Ar::Float64                  # Aerodynamic drag coefficient
@@ -34,33 +30,49 @@ struct QuadcopterSimParameters
     function QuadcopterSimParameters(;
         t_final = 10.0,
         dt = 0.1,
-        roll = 15,
-        pitch = 15,
-        yaw = 45,
-        p = 0.2,
-        q = 0.2,
-        r = 2.0,
-        I_diag = SVector(1e-3, 1e-3, 2e-3),
+        roll = 0.0,
+        pitch = 0.0,
+        yaw = 0.0,
+        p = 0.0,
+        q = 0.0,
+        r = 0.0,
+        I_xx = 1e-3, 
+        I_yy = 1e-3, 
+        I_zz = 2e-3,
         J_r = 6e-5,
         Ar = 1e-6,
         kp = 0.05,
         ki = 0.0,
         kd = 0.025,
-        integrator = SVector(0.0, 0.0, 0.0),
+        er = 0.0,
+        ep = 0.0,
+        ey = 0.0,
         m = 0.05,
         g = 9.81,
         L = 0.1,
         kf = 1e-5,
         km = 2e-6,
-        spin_dirs = SVector(1, -1, 1, -1),
+        spin_M1 =  1,
+        spin_M2 = -1,
+        spin_M3 =  1,
+        spin_M4 = -1,
     )
+        attitude = SVector(roll, pitch, yaw)
+        angular_rates = SVector(p, q, r)
+        I_diag = SVector(I_xx, I_yy, I_zz)
+        integrator_error = SVector(er, ep, ey)
         P_body = @SVector [
             SVector(L/√2, L/√2, 0.0),   # M1: +x, +y
             SVector(L/√2, -L/√2, 0.0),   # M2: +x, -y
             SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
             SVector(-L/√2, L/√2, 0.0),    # M4: -x, +y
         ]
-        new(I_diag, J_r, Ar, kp, ki, kd, integrator, m, g, L, kf, km, P_body, spin_dirs)
+        spin_dirs = SVector(spin_M1, spin_M2, spin_M3, spin_M4)
+        new(
+            t_final, dt, attitude, angular_rates, 
+            I_diag, J_r, Ar, kp, ki, kd, integrator_error, 
+            m, g, L, kf, km, P_body, spin_dirs
+        )
     end
 end
 
@@ -86,7 +98,8 @@ with proportional (`kp`), integral (`ki`), and derivative (`kd`) gains.
 
 # Notes
 - The reference attitude is assumed to be **zero**, so the error is simply
-  the negative of the current Euler angles.
+  the negative of the current Euler angles, this function assumes only the 
+  roll and pitch measurements are available.
 - Derivative error is computed from the body angular rates `[-p, -q, -r]`.
 - The integral error is **updated in place** inside the function; if persistence
   across timesteps is required, the updated integral state must be stored externally.
@@ -444,11 +457,11 @@ end
 # --- Main execution ---
 function main()
     run_dashboard(
+        "Quadcopter Attitude Stabilizer",
         quadcopter_interfaces(),
         initialize_sim,
         quadcopter_simulation,
         Dict("main_view" => animate_quadcopter);
-        title = "Quadcopter Attitude Stabilizer",
     )
 end
 
