@@ -24,54 +24,38 @@ struct QuadcopterSimParameters
     L::Float64                   # Arm length [m]
     kf::Float64                  # Thrust coefficient
     km::Float64                  # Drag torque coefficient
-    P_body::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
+    motor_positions::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
     spin_dirs::SVector{4,Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
 
     function QuadcopterSimParameters(;
         t_final = 10.0,
         dt = 0.1,
-        roll = 0.0,
-        pitch = 0.0,
-        yaw = 0.0,
-        p = 0.0,
-        q = 0.0,
-        r = 0.0,
-        I_xx = 1e-3, 
-        I_yy = 1e-3, 
-        I_zz = 2e-3,
+        rpy = SVector(0.0, 0.0, 0.0),
+        pqr = SVector(0.0, 0.0, 0.0),
+        I_diag = SVector(1e-3, 1e-3, 1e-2),
         J_r = 6e-5,
         Ar = 1e-6,
         kp = 0.05,
         ki = 0.0,
         kd = 0.025,
-        er = 0.0,
-        ep = 0.0,
-        ey = 0.0,
+        integrator_error = SVector(0.0, 0.0, 0.0),
         m = 0.05,
         g = 9.81,
         L = 0.1,
         kf = 1e-5,
         km = 2e-6,
-        spin_M1 =  1,
-        spin_M2 = -1,
-        spin_M3 =  1,
-        spin_M4 = -1,
-    )
-        attitude = SVector(roll, pitch, yaw)
-        angular_rates = SVector(p, q, r)
-        I_diag = SVector(I_xx, I_yy, I_zz)
-        integrator_error = SVector(er, ep, ey)
-        P_body = @SVector [
+        motor_positions = SVector(
             SVector(L/√2, L/√2, 0.0),   # M1: +x, +y
             SVector(L/√2, -L/√2, 0.0),   # M2: +x, -y
             SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
             SVector(-L/√2, L/√2, 0.0),    # M4: -x, +y
-        ]
-        spin_dirs = SVector(spin_M1, spin_M2, spin_M3, spin_M4)
+        ),
+        spin_dirs = SVector(1, -1, 1, -1),
+    )
         new(
-            t_final, dt, attitude, angular_rates, 
+            t_final, dt, rpy, pqr, 
             I_diag, J_r, Ar, kp, ki, kd, integrator_error, 
-            m, g, L, kf, km, P_body, spin_dirs
+            m, g, L, kf, km, motor_positions, spin_dirs
         )
     end
 end
@@ -139,7 +123,7 @@ for an arbitrary quadrotor geometry.
 - `thrust::Float64`: Desired total thrust (N) produced by all rotors combined.
 - `τ_control::SVector{3,Float64}`: Desired body torques `(τx, τy, τz)` in N·m.
 - `params`: Parameter struct containing:
-    - `P_body::Vector{SVector{3,Float64}}`: Rotor position vectors in body frame (m).
+    - `motor_positions::Vector{SVector{3,Float64}}`: Rotor position vectors in body frame (m).
     - `kf::Float64`: Thrust coefficient (N·s²/rad²).
     - `km::Float64`: Moment (drag) coefficient (N·m·s²/rad²).
     - `spin_dirs::NTuple{4,Float64}`: Spin direction of each rotor (+1 for CCW, −1 for CW).
@@ -150,7 +134,7 @@ for an arbitrary quadrotor geometry.
 """
 function motor_mixing(thrust, τ_control, params)
     τx, τy, τz = τ_control
-    P = params.P_body
+    P = params.motor_positions
     kf, km = params.kf, params.km
     spin_dirs = params.spin_dirs
 
@@ -191,7 +175,7 @@ dynamics simulation to determine how the motor outputs affect the vehicle's stat
 """
 function aerodynamics(w, params)
     kf, km = params.kf, params.km
-    P_body = params.P_body
+    motor_positions = params.motor_positions
     spin_dirs = params.spin_dirs
 
     τ = SVector{3,Float64}(0.0, 0.0, 0.0)
@@ -204,7 +188,7 @@ function aerodynamics(w, params)
 
         # Accumulate total thrust
         F_z += Ti
-        τ += cross(P_body[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
+        τ += cross(motor_positions[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
     end
 
     return F_z, τ
@@ -281,7 +265,7 @@ center of mass (COM). Assumes '+' configuration.
 # Returns
 - `Vector{Vector{Float64}}`: List of 4 motor positions `[x, y, z]` in the inertial frame after rotation.
 """
-function relative_motor_positions(φ, θ, ψ, P_body)
+function relative_motor_positions(φ, θ, ψ, motor_positions)
     # Rotation matrix R_IB (body → inertial) using ZYX (yaw-pitch-roll)
     cψ, sψ = cos(ψ), sin(ψ)
     cθ, sθ = cos(θ), sin(θ)
@@ -294,7 +278,7 @@ function relative_motor_positions(φ, θ, ψ, P_body)
     ]
 
     # Rotate body-frame motor positions into inertial frame
-    P_inertial = [R_IB * P for P in P_body]
+    P_inertial = [R_IB * P for P in motor_positions]
     # Return as a Vector of Float64 vectors
     return reduce(hcat, [collect(P) for P in P_inertial])
 end
@@ -360,7 +344,7 @@ function animate_quadcopter(
         yaw = df.yaw[i]
 
         # calculate motor positions from Euler angles
-        motors = relative_motor_positions(roll, pitch, yaw, params.P_body)
+        motors = relative_motor_positions(roll, pitch, yaw, params.motor_positions)
         push!(
             frames,
             frame(
@@ -431,17 +415,34 @@ end
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initialize_sim(params)
-    params = QuadcopterSimParameters(;params)
-    # Define the names of all the states to save into the df
-    # Extract initial states from input
-    state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
-    x0 = [deg2rad(params.roll), deg2rad(params.pitch), deg2rad(params.yaw), params.p, params.q, params.r]
+function initialize_sim(inputs::NTuple{18, Any})
+    names = (
+        :t_final, :dt, :rpy_table, :pqr_table, :I_diag_table, :J_r,
+        :Ar, :kp, :ki, :kd, :integrator_error_table, :m,
+        :g, :L, :kf, :km, :motor_position_table, :spin_dir_table
+    )
 
-    return params, state_names, x0
+    # Convert to named tuple for clarity
+    kwargs = (; zip(names, inputs)...)
+
+    # Fill in missing (nothing) entries
+    # params_kw = merge(defaults, map(v -> isnothing(v[2]) ? (v[1] => get(defaults, v[1], v[2])) : v, pairs(kwargs)))
+
+    params = QuadcopterSimParameters(; params_kw...)
+
+    x0 = [
+        deg2rad(params.rpy[1]),
+        deg2rad(params.rpy[2]),
+        deg2rad(params.rpy[3]),
+        params.pqr[1],
+        params.pqr[2],
+        params.pqr[3],
+    ]
+
+    return params, x0
 end
 
-function quadcopter_simulation((params, state_names, x0))
+function quadcopter_simulation((params, x0))
     @info "Running Simulation"
     # run sim with RK4
     rk4_simulation(
@@ -450,7 +451,7 @@ function quadcopter_simulation((params, state_names, x0))
         t_final = params.t_final,
         dt = params.dt,
         params = params,
-        state_names = state_names,
+        state_names = ["roll", "pitch", "yaw", "p", "q", "r"],
     )
 end
 

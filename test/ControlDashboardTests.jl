@@ -44,7 +44,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         # Define the inputs for this test case
         figures = Dict("main_graph" => mock_renderer)
-        interfaces = ["duration_slider", "dt_slider"]
+        interfaces = [("duration_slider", "value"), ("dt_slider", "value")]
 
         # Execute the function to be tested
         set_callbacks!(dash(), mock_state_factory, mock_run_simulation, figures, interfaces)
@@ -73,7 +73,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         app = dash()
         figures = Dict("figure_A" => mock_renderer, "figure_B" => mock_renderer)
-        interfaces = ["interface1"]
+        interfaces = [("sliderA", "value"), ("sliderB", "value")]
 
         set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
 
@@ -86,7 +86,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         app = dash()
         figures = Dict() # Empty dictionary
-        interfaces = ["slider1"]
+        interfaces = [("slider", "value")]
 
         set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
 

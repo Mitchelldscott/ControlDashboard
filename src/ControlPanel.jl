@@ -3,7 +3,7 @@ module ControlPanel
 using Dash
 
 export make_control_panel, make_panel, build_component, 
-    get_component_ids, sample_time_and_duration_sliders
+    get_interactive_components, sample_time_and_duration_sliders
 
 """
     build_component(config::Dict; component_style::Dict=Dict())
@@ -77,7 +77,7 @@ function build_component(config::Dict, component_style = Dict())
 
     ctype = get(config, "component", "input")
     label = get(config, "label", "")
-    compid = get(config, "id", "")
+    compid = config["id"]
 
     # Dispatch based on the component type string, using Val(Symbol(ctype))
     component = build_component_ui(Val(Symbol(ctype)), config, compid)
@@ -173,12 +173,12 @@ function build_component_ui(::Val{:checkbox}, config::Dict, compid::AbstractStri
 end
 
 # 5. DataTable Component (Dispatches on ::Val{:datatable})
-function build_component_ui(::Val{:datatable}, config::Dict, compid::AbstractString)
+function build_component_ui(val::Val{:datatable}, config::Dict, compid::AbstractString)
     # Assumes DataTable is the Julia Dash component function name for dash_table.DataTable
     return dash_datatable(
         id = compid,
         columns = get(config, "columns", []),
-        data = get(config, "data", []),
+        data = get(config, "data", val),
         editable = get(config, "editable", false),
         filter_action = get(config, "filter_action", "none"),
         sort_action = get(config, "sort_action", "none"),
@@ -199,21 +199,10 @@ end
 
 Build a flexible Dash panel of UI components.
 
-Each `config` is a `Dict` describing a component. Minimum keys:
+Each `config` is a `Dict` describing a component. Required keys:
 - `"component"` :: String, one of `"input"`, `"slider"`, `"dropdown"`, ...
 - `"label"`     :: String, label text
 - `"id"`        :: String, component id
-
-Optional keys (depending on component type):
-- `"type"`      :: For input: `"number"`, `"text"`, ...
-- `"inputmode"` :: For input: `"decimal"`, `"numeric"`, ...
-- `"value"`     :: Default value
-- `"min"`, `"max"` :: Bounds
-- `"step"`      :: Step size
-- `"options"`   :: For dropdown: array of Dicts with `label` and `value`
-- `"marks"`     :: For slider: Dict of tick marks
-- `"debounce"`  :: For input: Bool
-- `"position"`  :: (row, col) grid position if `shape` provided
 
 Keywords:
 - `shape=(nrows, ncols)` → arrange components in a grid
@@ -225,14 +214,14 @@ function make_panel(
     component_style = Dict(),
     panel_style = Dict(),
 )
-
     if shape[1] == 1
-        return [build_component(config, component_style) for config in configs]
+        return [build_component(config, component_style) for config in configs if "id" in keys(config)]
     else
         nrows, ncols = shape
         contents = [html_div([]) for _ = 1:(nrows*ncols)]
         for config in configs
             pos = get(config, "position", nothing)
+            if !("id" in keys(config)) continue end
             if pos !== nothing
                 i, j = pos
                 idx = (i-1)*ncols + j
@@ -268,7 +257,7 @@ end
 # --- Method for Booleans ---
 function set_component_config!(config::Dict, val::Bool)
     config["component"] = "checkbox"
-    config["checked"] = val
+    config["value"] = val
 end
 
 # --- Method for Numbers ---
@@ -380,7 +369,6 @@ function make_control_panel(
         config = Dict(
             "id" => String(name),
             "label" => titlecase(String(name)),
-            "value" => val,
             "position" => (row_pos, col_pos),
         )
         infer_field_type!(config, val)
@@ -410,32 +398,70 @@ function sample_time_and_duration_sliders(component_style = Dict(), panel_style 
     make_panel(comps; component_style = component_style, panel_style = panel_style)
 end
 
+function get_field_name(component_name)
+    if component_name in ["dcc_input", "dcc_slider", "dcc_dropdown", "dcc_checklist"]
+        return "value"
+    elseif component_name == "dash_datatable"
+        return "data"
+    else
+        return ""
+    end
+end
+
 """
-    get_component_ids(panel::Vector)
+    deduplicate_interfaces(interfaces)
 
-Extract all component IDs from elements in a control panel.
-
-Traverses each element recursively and collects the `"id"` field from any
-component that defines one.
-
-# Example
-```julia
-ids = get_component_ids(make_control_panel(quadcopter_interfaces()))
-'''
+Remove duplicate values from a list of tuples, only checks the first element.
 """
-function get_component_ids(panel::Vector)
-    ids = String[]
-    for elem in panel
-        if elem isa Component
-            if hasproperty(elem, :children)
-                child_ids = get_component_ids(collect(Iterators.flatten([elem.children])))
-                append!(ids, child_ids)
-            elseif hasproperty(elem, :id) && !isempty(elem.id)
-                push!(ids, String(elem.id))
+function deduplicate_interfaces(interfaces)
+    seen = Set{String}()
+    deduped = Tuple{String,String}[]
+    for (id, field) in interfaces
+        if !(id ∈ seen)
+            push!(deduped, (id, field))
+            push!(seen, id)
+        end
+    end
+    return deduped
+end
+
+"""
+    get_interactive_components(panel::Vector)
+
+Return a vector of `(id, field)` pairs for all interactive components in the control panel.
+
+This function:
+- Recursively traverses nested `html_div` or `Component` elements.
+- Identifies components with an `:id` property.
+- Determines the correct field to read using `get_field_name(::Type)` dispatch.
+
+Useful for building Dash callback interfaces automatically.
+"""
+function get_interactive_components(panel::Vector)
+    interfaces = Tuple{String, String}[]
+    for element in panel
+        if element isa Component
+            component_name = lowercase(String(getfield(element, 1)))
+            # Collect (id, field) pairs for interactive components
+            if hasproperty(element, :id) && !isnothing(element.id) && !isempty(element.id)
+                id = String(element.id)
+                field = get_field_name(component_name)
+                if length(field) > 0
+                    push!(interfaces, (id, field))
+                end
+            end
+            # Recurse through children if present
+            if hasproperty(element, :children) && !isempty(element.children)
+                children = element.children isa AbstractVector ? collect(Iterators.flatten([element.children])) : []
+                child_info = get_interactive_components(children)
+                if length(child_info) > 0 
+                    append!(interfaces, child_info)
+                end
             end
         end
-        
     end
-    return unique(ids)
+    
+    return deduplicate_interfaces(interfaces)
 end
+
 end # module

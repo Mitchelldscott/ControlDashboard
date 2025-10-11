@@ -130,11 +130,7 @@ using ControlDashboard
         @test panel[3].children[2].id == "c"
         @test panel[3].children[2].type == "text"
         @test panel[4].children[2].id == "d"
-        # @test panel[4].children[2].options == [
-        #     Dict("label" => "1", "value" => "1"),
-        #     Dict("label" => "2", "value" => "2"),
-        #     Dict("label" => "3", "value" => "3"),
-        # ]
+        @test panel[4].children[2].data == [Dict("Value" => 1), Dict("Value" => 2), Dict("Value" => 3)]
 
         # Test custom shape
         panel2 = make_control_panel(params; shape = (2, 2))
@@ -163,64 +159,66 @@ end
 
 
 
-#--- get_component_ids Test Suite ---
+#--- get_interactive_components Test Suite ---
 
-@testset "get_component_ids Tests" begin
+@testset "get_interactive_components Tests" begin
     @testset "Basic Cases" begin
         @testset "Handles empty panel" begin
-            @test get_component_ids(make_panel(Dict[])) == []
+            @test get_interactive_components(make_panel(Dict[])) == []
         end
 
         @testset "Extracts a single ID" begin
             config = [Dict("component" => "input", "label" => "Test", "id" => "test-id-1")]
             panel = make_panel(config)
-            @test get_component_ids(panel) == ["test-id-1"]
+            @test get_interactive_components(panel) == [("test-id-1", "value")]
         end
 
         @testset "Extracts multiple unique IDs" begin
             config = [
                 Dict("component" => "input", "label" => "A", "id" => "id-a", "position" => (1,1)),
                 Dict("component" => "input", "label" => "B", "id" => "id-b", "position" => (1,2)),
-                Dict("component" => "input", "label" => "C", "id" => "id-c", "position" => (2,1)),
+                Dict("component" => "datatable", "label" => "C", "id" => "id-c", "position" => (2,1)),
             ]
             panel = make_panel(config; shape=(2,2))
-            expected_ids = ["id-a", "id-b", "id-c"]
-            # Sort for consistent comparison
-            @test sort(get_component_ids(panel)) == sort(expected_ids)
+            expected_ids = [("id-a", "value"), ("id-b", "value"), ("id-c", "data")]
+            results = get_interactive_components(panel)
+            @test results == expected_ids
         end
     end
 
     @testset "Advanced Cases" begin
         @testset "Handles components with no ID" begin
             config = [
-                Dict("component" => "input", "label" => "A", "id" => "id-a"),
-                Dict("component" => "input", "label" => "B"), # No ID
-                Dict("component" => "input", "label" => "C", "id" => "id-c"),
+                Dict("component" => "slider", "label" => "A", "id" => "id-a"),
+                Dict("component" => "checkbox", "label" => "B"), # No ID, wont register
+                Dict("component" => "dropdown", "label" => "C", "id" => "id-c"),
             ]
             panel = make_panel(config)
-            @test sort(get_component_ids(panel)) == ["id-a", "id-c"]
+            results = get_interactive_components(panel)
+            @test results == [("id-a", "value"), ("id-c", "value")]
         end
 
         @testset "Returns only unique IDs when duplicates are present" begin
             config = [
-                Dict("component" => "input", "label" => "A", "id" => "id-a"),
-                Dict("component" => "input", "label" => "B", "id" => "id-b"),
-                Dict("component" => "input", "label" => "C", "id" => "id-a"), # Duplicate ID
+                Dict("component" => "slider", "label" => "A", "id" => "id-a"),
+                Dict("component" => "checkbox", "label" => "B", "id" => "id-b"),
+                Dict("component" => "datatable", "label" => "C", "id" => "id-a"), # Duplicate ID
             ]
             panel = make_panel(config)
-            @test sort(get_component_ids(panel)) == ["id-a", "id-b"]
+            results = get_interactive_components(panel)
+            @test results == [("id-a", "value"), ("id-b", "value")]
         end
 
         @testset "Works on complex, nested panel structure" begin
             quadcopter_config = [
                 Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "position"=>(1, 1)),
                 Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "position"=>(2, 1)),
-                Dict("component"=>"input", "label"=>"Roll", "id"=>"roll", "position"=>(1, 2)),
-                Dict("component"=>"input", "label"=>"Pitch", "id"=>"pitch", "position"=>(1, 3)),
-                Dict("component"=>"input", "label"=>"Yaw", "id"=>"yaw", "position"=>(1, 4)),
-                Dict("component"=>"input", "label"=>"P", "id"=>"p", "position"=>(2, 2)),
-                Dict("component"=>"input", "label"=>"Q", "id"=>"q", "position"=>(2, 3)),
-                Dict("component"=>"input", "label"=>"R", "id"=>"r", "position"=>(2, 4)),
+                Dict("component"=>"slider", "label"=>"Roll", "id"=>"roll", "position"=>(1, 2)),
+                Dict("component"=>"slider", "label"=>"Pitch", "id"=>"pitch", "position"=>(1, 3)),
+                Dict("component"=>"slider", "label"=>"Yaw", "id"=>"yaw", "position"=>(1, 4)),
+                Dict("component"=>"slider", "label"=>"P", "id"=>"p", "position"=>(2, 2)),
+                Dict("component"=>"slider", "label"=>"Q", "id"=>"q", "position"=>(2, 3)),
+                Dict("component"=>"slider", "label"=>"R", "id"=>"r", "position"=>(2, 4)),
                 Dict("component"=>"input", "label"=>"Kp", "id"=>"Kp", "position"=>(3, 1)),
                 Dict("component"=>"input", "label"=>"Ki", "id"=>"Ki", "position"=>(3, 2)),
                 Dict("component"=>"input", "label"=>"Kd", "id"=>"Kd", "position"=>(3, 3)),
@@ -232,12 +230,13 @@ end
                 Dict("component"=>"input", "label"=>"Thrust Coeff", "id"=>"Kf", "position"=>(2, 6)),
                 Dict("component"=>"input", "label"=>"Drag Coeff", "id"=>"Km", "position"=>(3, 6)),
             ]
-            expected = [c["id"] for c in quadcopter_config]
+            expected = [(c["id"], "value") for c in quadcopter_config]
             panel = make_panel(quadcopter_config; shape=(3, 6))
+            results = get_interactive_components(panel)
             
             # The function should find all 18 unique IDs
-            @test length(get_component_ids(panel)) == 18
-            @test sort(get_component_ids(panel)) == sort(expected)
+            @test length(results) == 18
+            @test sort(results) == sort(expected)
         end
     end
 end
