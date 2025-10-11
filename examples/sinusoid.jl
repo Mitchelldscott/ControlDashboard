@@ -115,4 +115,6 @@ function main()
 end
 
 # Run the main function
-main()
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end
