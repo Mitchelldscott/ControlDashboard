@@ -1,6 +1,6 @@
 using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
 
-@testset "Simulation tests" begin    
+@testset "Simulation tests" begin
     @testset "ode_simulation tests" begin
         # Define a simple scalar ODE: du/dt = -u, solution u(t) = exp(-t)
         function simple_dynamics!(du, u, p, t)
@@ -8,7 +8,13 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         end
 
         # Run simulation
-        df = rk4_simulation(simple_dynamics!, [1.0]; t_final = 1.0, dt = 0.1, state_names=["x1"])
+        df = rk4_simulation(
+            simple_dynamics!,
+            [1.0];
+            t_final = 1.0,
+            dt = 0.1,
+            state_names = ["x1"],
+        )
 
         # Check type
         @test df isa DataFrame

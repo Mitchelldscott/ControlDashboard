@@ -130,7 +130,8 @@ using ControlDashboard
         @test panel[3].children[2].id == "c"
         @test panel[3].children[2].type == "text"
         @test panel[4].children[2].id == "d"
-        @test panel[4].children[2].data == [Dict("Value" => 1), Dict("Value" => 2), Dict("Value" => 3)]
+        @test panel[4].children[2].data ==
+              [Dict("Value" => 1), Dict("Value" => 2), Dict("Value" => 3)]
 
         # Test custom shape
         panel2 = make_control_panel(params; shape = (2, 2))
@@ -175,11 +176,26 @@ end
 
         @testset "Extracts multiple unique IDs" begin
             config = [
-                Dict("component" => "input", "label" => "A", "id" => "id-a", "position" => (1,1)),
-                Dict("component" => "input", "label" => "B", "id" => "id-b", "position" => (1,2)),
-                Dict("component" => "datatable", "label" => "C", "id" => "id-c", "position" => (2,1)),
+                Dict(
+                    "component" => "input",
+                    "label" => "A",
+                    "id" => "id-a",
+                    "position" => (1, 1),
+                ),
+                Dict(
+                    "component" => "input",
+                    "label" => "B",
+                    "id" => "id-b",
+                    "position" => (1, 2),
+                ),
+                Dict(
+                    "component" => "datatable",
+                    "label" => "C",
+                    "id" => "id-c",
+                    "position" => (2, 1),
+                ),
             ]
-            panel = make_panel(config; shape=(2,2))
+            panel = make_panel(config; shape = (2, 2))
             expected_ids = [("id-a", "value"), ("id-b", "value"), ("id-c", "data")]
             results = get_interactive_components(panel)
             @test results == expected_ids
@@ -211,29 +227,69 @@ end
 
         @testset "Works on complex, nested panel structure" begin
             quadcopter_config = [
-                Dict("component"=>"input", "label"=>"Duration", "id"=>"t_final", "position"=>(1, 1)),
-                Dict("component"=>"input", "label"=>"Sample time", "id"=>"dt", "position"=>(2, 1)),
-                Dict("component"=>"slider", "label"=>"Roll", "id"=>"roll", "position"=>(1, 2)),
-                Dict("component"=>"slider", "label"=>"Pitch", "id"=>"pitch", "position"=>(1, 3)),
-                Dict("component"=>"slider", "label"=>"Yaw", "id"=>"yaw", "position"=>(1, 4)),
+                Dict(
+                    "component"=>"input",
+                    "label"=>"Duration",
+                    "id"=>"t_final",
+                    "position"=>(1, 1),
+                ),
+                Dict(
+                    "component"=>"input",
+                    "label"=>"Sample time",
+                    "id"=>"dt",
+                    "position"=>(2, 1),
+                ),
+                Dict(
+                    "component"=>"slider",
+                    "label"=>"Roll",
+                    "id"=>"roll",
+                    "position"=>(1, 2),
+                ),
+                Dict(
+                    "component"=>"slider",
+                    "label"=>"Pitch",
+                    "id"=>"pitch",
+                    "position"=>(1, 3),
+                ),
+                Dict(
+                    "component"=>"slider",
+                    "label"=>"Yaw",
+                    "id"=>"yaw",
+                    "position"=>(1, 4),
+                ),
                 Dict("component"=>"slider", "label"=>"P", "id"=>"p", "position"=>(2, 2)),
                 Dict("component"=>"slider", "label"=>"Q", "id"=>"q", "position"=>(2, 3)),
                 Dict("component"=>"slider", "label"=>"R", "id"=>"r", "position"=>(2, 4)),
                 Dict("component"=>"input", "label"=>"Kp", "id"=>"Kp", "position"=>(3, 1)),
                 Dict("component"=>"input", "label"=>"Ki", "id"=>"Ki", "position"=>(3, 2)),
                 Dict("component"=>"input", "label"=>"Kd", "id"=>"Kd", "position"=>(3, 3)),
-                Dict("component"=>"input", "label"=>"Arm length", "id"=>"L", "position"=>(3, 4)),
+                Dict(
+                    "component"=>"input",
+                    "label"=>"Arm length",
+                    "id"=>"L",
+                    "position"=>(3, 4),
+                ),
                 Dict("component"=>"input", "label"=>"Ixx", "id"=>"Ixx", "position"=>(1, 5)),
                 Dict("component"=>"input", "label"=>"Iyy", "id"=>"Iyy", "position"=>(2, 5)),
                 Dict("component"=>"input", "label"=>"Izz", "id"=>"Izz", "position"=>(3, 5)),
                 Dict("component"=>"input", "label"=>"Mass", "id"=>"m", "position"=>(1, 6)),
-                Dict("component"=>"input", "label"=>"Thrust Coeff", "id"=>"Kf", "position"=>(2, 6)),
-                Dict("component"=>"input", "label"=>"Drag Coeff", "id"=>"Km", "position"=>(3, 6)),
+                Dict(
+                    "component"=>"input",
+                    "label"=>"Thrust Coeff",
+                    "id"=>"Kf",
+                    "position"=>(2, 6),
+                ),
+                Dict(
+                    "component"=>"input",
+                    "label"=>"Drag Coeff",
+                    "id"=>"Km",
+                    "position"=>(3, 6),
+                ),
             ]
             expected = [(c["id"], "value") for c in quadcopter_config]
-            panel = make_panel(quadcopter_config; shape=(3, 6))
+            panel = make_panel(quadcopter_config; shape = (3, 6))
             results = get_interactive_components(panel)
-            
+
             # The function should find all 18 unique IDs
             @test length(results) == 18
             @test sort(results) == sort(expected)

@@ -12,10 +12,14 @@ using .ControlPanel: make_panel, make_control_panel, get_interactive_components
 include("Simulation.jl")
 using .Simulation: sol_to_dataframe, rk4_simulation
 
-export 
-    initialize_dashboard, set_callbacks!, run_dashboard,
-    make_panel, make_control_panel, get_interactive_components,
-    sol_to_dataframe, rk4_simulation
+export initialize_dashboard,
+    set_callbacks!,
+    run_dashboard,
+    make_panel,
+    make_control_panel,
+    get_interactive_components,
+    sol_to_dataframe,
+    rk4_simulation
 
 """
     initialize_dashboard(title; title_style, control_panel, views, external_stylesheets)
@@ -32,14 +36,18 @@ Create and initialize a Dash application layout with a title, control panel, and
 # Returns
 - A configured `Dash` app instance with the specified layout.
 """
-function initialize_dashboard(title::AbstractString;
+function initialize_dashboard(
+    title::AbstractString;
     title_style::Dict = Dict("textAlign" => "center"),
     control_panel::AbstractVector = sample_time_and_duration_sliders(),
     views::AbstractVector = [dcc_graph(id = "main_view")],
-    external_stylesheets::AbstractVector = ["https://bootswatch.com/5/darkly/bootstrap.min.css"])
+    external_stylesheets::AbstractVector = [
+        "https://bootswatch.com/5/darkly/bootstrap.min.css",
+    ],
+)
 
     app = dash(external_stylesheets = external_stylesheets)
-    
+
     app.layout = html_div() do
         html_h1(title, style = title_style),
         control_panel,  # Control Panel
@@ -71,15 +79,17 @@ Whenever any input in `interfaces` changes, the callback:
 If `figures` or `interfaces` are empty, no callbacks are registered.
 """
 function set_callbacks!(
-    app, 
-    state_factory::Function, 
-    run_simulation::Function, 
-    figures::AbstractDict, 
-    interfaces::AbstractVector
+    app,
+    state_factory::Function,
+    run_simulation::Function,
+    figures::AbstractDict,
+    interfaces::AbstractVector,
 )
     # Define the callback function that links the sliders to the graph.
     # When a slider value changes, this function is triggered.
-    if length(interfaces) === 0 return end
+    if length(interfaces) === 0
+        return
+    end
     for (figure_name, renderer) in figures
         callback!(
             app,
@@ -121,7 +131,8 @@ Launch an interactive Dash-based simulation dashboard that connects UI controls 
 # Returns
 Nothing. Runs the dashboard server in-place.
 """
-function run_dashboard(title::AbstractString,
+function run_dashboard(
+    title::AbstractString,
     control_panel::AbstractVector,
     initialize_sim::Function,
     simulate::Function,
@@ -129,20 +140,27 @@ function run_dashboard(title::AbstractString,
     host::AbstractString = "127.0.0.1",
     port::Integer = 8050,
     views::AbstractVector = [dcc_graph(id = "main_view")],
-    external_stylesheets::AbstractVector = ["https://bootswatch.com/5/darkly/bootstrap.min.css"])
+    external_stylesheets::AbstractVector = [
+        "https://bootswatch.com/5/darkly/bootstrap.min.css",
+    ],
+)
 
     # Step 1: Initialize dashboard app with user-specified interfaces
-    app = initialize_dashboard(title; 
-        control_panel = control_panel, 
-        views = views, 
-        external_stylesheets=external_stylesheets)
-    
+    app = initialize_dashboard(
+        title;
+        control_panel = control_panel,
+        views = views,
+        external_stylesheets = external_stylesheets,
+    )
+
     # Step 2: Register simulation and renderer callbacks
-    set_callbacks!(app,
+    set_callbacks!(
+        app,
         initialize_sim,
         simulate,
         renderers,
-        get_interactive_components(control_panel))
+        get_interactive_components(control_panel),
+    )
 
     # Step 3: Run the dashboard server
     run_server(app, host, port)

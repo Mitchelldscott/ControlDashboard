@@ -5,7 +5,7 @@ using Dash,
     LinearAlgebra,
     DifferentialEquations,
     ControlDashboard,
-    ControlDashboard.ControlPanel 
+    ControlDashboard.ControlPanel
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]
@@ -53,9 +53,24 @@ struct QuadcopterSimParameters
         spin_dirs = SVector(1, -1, 1, -1),
     )
         new(
-            t_final, dt, rpy, pqr, 
-            I_diag, J_r, Ar, kp, ki, kd, integrator_error, 
-            m, g, L, kf, km, motor_positions, spin_dirs
+            t_final,
+            dt,
+            rpy,
+            pqr,
+            I_diag,
+            J_r,
+            Ar,
+            kp,
+            ki,
+            kd,
+            integrator_error,
+            m,
+            g,
+            L,
+            kf,
+            km,
+            motor_positions,
+            spin_dirs,
         )
     end
 end
@@ -415,11 +430,26 @@ end
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initialize_sim(inputs::NTuple{18, Any})
+function initialize_sim(inputs::NTuple{18,Any})
     names = (
-        :t_final, :dt, :rpy_table, :pqr_table, :I_diag_table, :J_r,
-        :Ar, :kp, :ki, :kd, :integrator_error_table, :m,
-        :g, :L, :kf, :km, :motor_position_table, :spin_dir_table
+        :t_final,
+        :dt,
+        :rpy_table,
+        :pqr_table,
+        :I_diag_table,
+        :J_r,
+        :Ar,
+        :kp,
+        :ki,
+        :kd,
+        :integrator_error_table,
+        :m,
+        :g,
+        :L,
+        :kf,
+        :km,
+        :motor_position_table,
+        :spin_dir_table,
     )
 
     # Convert to named tuple for clarity

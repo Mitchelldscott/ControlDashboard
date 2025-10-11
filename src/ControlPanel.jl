@@ -2,8 +2,11 @@ module ControlPanel
 
 using Dash
 
-export make_control_panel, make_panel, build_component, 
-    get_interactive_components, sample_time_and_duration_sliders
+export make_control_panel,
+    make_panel,
+    build_component,
+    get_interactive_components,
+    sample_time_and_duration_sliders
 
 """
     build_component(config::Dict; component_style::Dict=Dict())
@@ -104,7 +107,7 @@ end
 # Note: dcc_input, dcc_slider, etc., and html_div, html_label are assumed to be defined by Dash
 
 # Fallback method for unknown component types
-function build_component_ui(::Val{S}, config::Dict, compid::AbstractString) where S
+function build_component_ui(::Val{S}, config::Dict, compid::AbstractString) where {S}
     error("Unknown component type: $S")
 end
 
@@ -134,9 +137,7 @@ function build_component_ui(::Val{:slider}, config::Dict, compid::AbstractString
     end
 
     # Calculate default marks if none are provided
-    marks = get(config, "marks", Dict(
-        string(i)=>i for i = min_val:(range/5):max_val
-    ))
+    marks = get(config, "marks", Dict(string(i)=>i for i = min_val:(range/5):max_val))
 
     return dcc_slider(
         id = compid,
@@ -215,13 +216,18 @@ function make_panel(
     panel_style = Dict(),
 )
     if shape[1] == 1
-        return [build_component(config, component_style) for config in configs if "id" in keys(config)]
+        return [
+            build_component(config, component_style) for
+            config in configs if "id" in keys(config)
+        ]
     else
         nrows, ncols = shape
         contents = [html_div([]) for _ = 1:(nrows*ncols)]
         for config in configs
             pos = get(config, "position", nothing)
-            if !("id" in keys(config)) continue end
+            if !("id" in keys(config))
+                continue
+            end
             if pos !== nothing
                 i, j = pos
                 idx = (i-1)*ncols + j
@@ -268,7 +274,7 @@ function set_component_config!(config::Dict, val::Number)
 end
 
 # --- Method for Strings and Symbols (combined with Union) ---
-function set_component_config!(config::Dict, val::Union{AbstractString, Symbol})
+function set_component_config!(config::Dict, val::Union{AbstractString,Symbol})
     config["component"] = "input"
     config["type"] = "text"
     config["value"] = string(val) # string() works for both
@@ -277,7 +283,7 @@ end
 # --- Method for Vectors ---
 function set_component_config!(config::Dict, val::AbstractVector)
     config["component"] = "datatable"
-    
+
     # Define the columns: a single editable column for the vector elements
     config["columns"] = [
         Dict(
@@ -285,15 +291,13 @@ function set_component_config!(config::Dict, val::AbstractVector)
             "id" => "Value",
             "deletable" => true,
             "selectable" => true,
-            "editable" => true # CRITICAL: Allows user to edit data
-        )
+            "editable" => true, # CRITICAL: Allows user to edit data
+        ),
     ]
 
     # Format the data: Convert the vector into a Vector of Dicts (list of rows)
     # Each original vector element becomes a row under the "Value" column.
-    config["data"] = [
-        Dict("Value" => o) for o in val
-    ]
+    config["data"] = [Dict("Value" => o) for o in val]
 
     # Set up standard DataTable features
     config["editable"] = true # Enable overall table editing
@@ -438,7 +442,7 @@ This function:
 Useful for building Dash callback interfaces automatically.
 """
 function get_interactive_components(panel::Vector)
-    interfaces = Tuple{String, String}[]
+    interfaces = Tuple{String,String}[]
     for element in panel
         if element isa Component
             component_name = lowercase(String(getfield(element, 1)))
@@ -452,15 +456,17 @@ function get_interactive_components(panel::Vector)
             end
             # Recurse through children if present
             if hasproperty(element, :children) && !isempty(element.children)
-                children = element.children isa AbstractVector ? collect(Iterators.flatten([element.children])) : []
+                children =
+                    element.children isa AbstractVector ?
+                    collect(Iterators.flatten([element.children])) : []
                 child_info = get_interactive_components(children)
-                if length(child_info) > 0 
+                if length(child_info) > 0
                     append!(interfaces, child_info)
                 end
             end
         end
     end
-    
+
     return deduplicate_interfaces(interfaces)
 end
 
