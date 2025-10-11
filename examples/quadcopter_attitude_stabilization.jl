@@ -342,12 +342,12 @@ function animate_quadcopter(
                             attr(
                                 frame = attr(duration = frame_duration, redraw = true),
                                 fromcurrent = true,
-                            ),
-                        ],
-                    ),
-                ],
-            ),
-        ],
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
     )
 
     frames = PlotlyFrame[]
@@ -404,7 +404,7 @@ function animate_quadcopter(
                     ],
                 ),
                 name = "frame$i",
-            ),
+            )
         )
     end
 
@@ -420,7 +420,7 @@ function quadcopter_interfaces()
     return make_control_panel(
         QuadcopterSimParameters();
         shape = (3, 6),
-        panel_style = Dict("display" => "flex", "alignItems" => "center"),
+        panel_style = Dict("display" => "flex", "alignItems" => "center")
     )
 end
 
@@ -449,7 +449,7 @@ function initialize_sim(inputs::NTuple{18,Any})
         :kf,
         :km,
         :motor_position_table,
-        :spin_dir_table,
+        :spin_dir_table
     )
 
     # Convert to named tuple for clarity
@@ -466,7 +466,7 @@ function initialize_sim(inputs::NTuple{18,Any})
         deg2rad(params.rpy[3]),
         params.pqr[1],
         params.pqr[2],
-        params.pqr[3],
+        params.pqr[3]
     ]
 
     return params, x0
@@ -481,7 +481,7 @@ function quadcopter_simulation((params, x0))
         t_final = params.t_final,
         dt = params.dt,
         params = params,
-        state_names = ["roll", "pitch", "yaw", "p", "q", "r"],
+        state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
     )
 end
 
