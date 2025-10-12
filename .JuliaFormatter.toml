@@ -1,0 +1,36 @@
+# === JuliaFormatter Configuration ===
+style = "default"           # "blue" or "yas" are also nice options
+indent = 4
+margin = 92
+
+# General layout
+remove_extra_newlines = true
+normalize_line_endings = "unix"
+short_to_long_function_def = true
+long_to_short_function_def = false
+always_use_return = false
+always_for_in = true
+whitespace_ops_in_indices = true
+whitespace_in_kwargs = true
+whitespace_typedefs = true
+format_docstrings = true
+align_struct_field = true
+align_assignment = true
+align_conditional = true
+align_pair_arrow = true
+align_matrix = true
+trailing_comma = true
+trailing_zero = true
+indent_submodule = true
+separate_kwargs_with_semicolon = true
+surround_whereop_typeparameters = true
+join_lines_based_on_source = true
+annotate_untyped_fields_with_any = false
+import_to_using = false
+pipe_to_function_call = false
+conditional_to_if = false
+disallow_single_arg_nesting = false
+yas_style_nesting = false
+
+# Ignore some files if you want:
+ignore = ["*.toml", "*.md", "LICENSE", ".git/", ".gitignore"]

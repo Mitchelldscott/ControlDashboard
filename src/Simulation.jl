@@ -11,19 +11,21 @@ Construct a DataFrame from the solution of a DifferentialEquations.ODEProblem.
 
 This is a helper function for simulations that use DifferentialEquations.jl.
 
-# Arguments 
-- `sol::` : The output of `DifferentialEquations.solve()`.
-- `cols::Vector{String}` : Column names of the DataFrame.
+# Arguments
+
+  - `sol::` : The output of `DifferentialEquations.solve()`.
+  - `cols::Vector{String}` : Column names of the DataFrame.
 
 # Returns
-- `df::DataFrame` : States and sample times extracted from a sol.
+
+  - `df::DataFrame` : States and sample times extracted from a sol.
 """
 function sol_to_dataframe(sol; cols::AbstractVector = string[])
     arr = Array(sol)  # each column is a state, rows = time steps
-    df = DataFrame(time = sol.t) # sol should always have t
+    df = DataFrame(; time = sol.t) # sol should always have t
     # Auto-generate names if not provided
     if isnothing(cols)
-        cols = ["x$(i)" for i = 1:size(arr, 1)]
+        cols = ["x$(i)" for i in 1:size(arr, 1)]
     end
     for (i, name) in enumerate(cols)
         df[!, Symbol(name)] = arr[i, :]  # grab the i-th state trajectory
@@ -37,16 +39,19 @@ end
 Simulate a system of ordinary differential equations (ODEs) over a given time horizon.
 
 # Arguments
-- `system_dynamics`: A function `f!(du, u, p, t)` defining the system dynamics in-place.
-- `initial_state`: Vector-like object or function that prepares simulation data from a tuple of interfaces.
-- `t_final`: (default = 10.0) Final simulation time.
-- `dt`: (default = 0.01) Time step for saving results.
-- `p`: (default = nothing) Optional parameters to pass to the dynamics.
+
+  - `system_dynamics`: A function `f!(du, u, p, t)` defining the system dynamics in-place.
+  - `initial_state`: Vector-like object or function that prepares simulation data from a tuple of interfaces.
+  - `t_final`: (default = 10.0) Final simulation time.
+  - `dt`: (default = 0.01) Time step for saving results.
+  - `p`: (default = nothing) Optional parameters to pass to the dynamics.
 
 # Returns
-- `DataFrame` containing simulation results with columns:
-    - `time` = simulation time points  
-    - state columns extracted from the solution (`x1, x2, ...` by default, or renamed if using `sol_to_dataframe` with labels).
+
+  - `DataFrame` containing simulation results with columns:
+
+      + `time` = simulation time points
+      + state columns extracted from the solution (`x1, x2, ...` by default, or renamed if using `sol_to_dataframe` with labels).
 """
 function rk4_simulation(
     system_dynamics,
@@ -62,7 +67,7 @@ function rk4_simulation(
     prob = ODEProblem(system_dynamics, initial_state, tspan)
     # Solve the ODE. Using Tsit5(), a powerful explicit Runge-Kutta method often effective 
     # for non-stiff dynamics like this attitude model [12, 16].
-    sol = solve(prob, Tsit5(), saveat = dt, p = params)
+    sol = solve(prob, Tsit5(); saveat = dt, p = params)
     # Process results into DataFrame
     return sol_to_dataframe(sol; cols = state_names)
 end

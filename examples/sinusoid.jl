@@ -22,14 +22,15 @@ function run_sin_simulation(state)
     @info "Running simulation"
     t = 0:state["dt"]:state["duration"]
     values = state["amplitude"] .* sin.(state["frequency"] .* t .+ state["phase"])
-    return DataFrame(time = collect(t), value = values)
+    return DataFrame(; time = collect(t), value = values)
 end
 
 # 3. Figure Generator: Takes a DataFrame and creates a PlotlyJS plot.
 function make_timeseries_figure(data::DataFrame)
+    @info "Rendering Plot"
     return Plot(
-        scatter(x = data.time, y = data.value, mode = "lines", name = "Signal"),
-        Layout(
+        scatter(; x = data.time, y = data.value, mode = "lines", name = "Signal"),
+        Layout(;
             title = "Sinusoid",
             xaxis_title = "Time (seconds)",
             yaxis_title = "Output",
@@ -38,76 +39,74 @@ function make_timeseries_figure(data::DataFrame)
     )
 end
 
-sin_wave_interfaces = make_panel(
-    [
-        Dict(
-            "component"=>"slider",
-            "label"=>"Amplitude",
-            "id"=>"amplitude",
-            "min"=>1.0,
-            "max"=>10.0,
-            "step"=>1.0,
-            "value"=>1.0,
-        ),
-        Dict(
-            "component"=>"slider",
-            "label"=>"Frequency",
-            "id"=>"frequency",
-            "min"=>1e-2,
-            "max"=>10.0,
-            "step"=>1e-2,
-            "value"=>1.0,
-        ),
-        Dict(
-            "component"=>"slider",
-            "label"=>"Phase",
-            "id"=>"phase",
-            "min"=>-5.0,
-            "max"=>5.0,
-            "step"=>1e-1,
-            "value"=>0.0,
-        ),
-        Dict(
-            "component"=>"slider",
-            "label"=>"Sample time",
-            "id"=>"dt",
-            "min"=>1e-2,
-            "max"=>1.0,
-            "step"=>1e-2,
-            "value"=>0.1,
-        ),
-    ];
-    shape = (2, 2),
-    panel_style = Dict(
-        "display" => "flex",
-        "flex-direction" => "row",
-        "flex-wrap" => "wrap",      # wrap when window is narrow
-        "justify-content" => "space-evenly",
-        "align-items" => "stretch",
-        "width" => "100%",
+sin_wave_interfaces = [
+    Dict(
+        "component"=>"slider",
+        "label"=>"Amplitude",
+        "id"=>"amplitude",
+        "min"=>1.0,
+        "max"=>10.0,
+        "step"=>1.0,
+        "value"=>1.0,
     ),
-    component_style = Dict(
-        "flex" => "1",
-        "width" => "100%",
-        "display" => "flex",
-        "flex-direction" => "column",
-        "align-items" => "stretch",
+    Dict(
+        "component"=>"slider",
+        "label"=>"Frequency",
+        "id"=>"frequency",
+        "min"=>1e-2,
+        "max"=>10.0,
+        "step"=>1e-2,
+        "value"=>1.0,
     ),
-)
+    Dict(
+        "component"=>"slider",
+        "label"=>"Phase",
+        "id"=>"phase",
+        "min"=>-5.0,
+        "max"=>5.0,
+        "step"=>1e-1,
+        "value"=>0.0,
+    ),
+    Dict(
+        "component"=>"slider",
+        "label"=>"Sample time",
+        "id"=>"dt",
+        "min"=>1e-2,
+        "max"=>1.0,
+        "step"=>1e-2,
+        "value"=>0.1,
+    ),
+]
 
 # --- Main execution block ---
 function main()
-    println("Starting control dashboard...")
-
     # Create the app by passing our custom simulation functions to the dashboard wrapper
-    app = initialize_dashboard("Sinusoid Tuner"; interfaces = sin_wave_interfaces)
-    set_callbacks!(
-        app,
-        initial_state,
-        run_sin_simulation,
-        Dict("main_view" => make_timeseries_figure),
-        ["amplitude", "frequency", "phase", "dt"],
+    panel = make_panel(
+        sin_wave_interfaces;
+        shape = (2, 2),
+        panel_style = Dict(
+            "width" => "100%",
+            "display" => "flex",
+            "flex-direction" => "row",
+            "align-items" => "stretch",
+            "justify-content" => "space-evenly",
+        ),
+        component_style = Dict(
+            "flex" => "1",
+            "width" => "100%",
+            "display" => "flex",
+            "flex-direction" => "column",
+            "align-items" => "stretch",
+        ),
     )
+    app = initialize_dashboard("Sinusoid Tuner"; control_panel = panel)
+    # set_callbacks!(
+    #     app,
+    #     initial_state,
+    #     run_sin_simulation,
+    #     Dict("main_view" => make_timeseries_figure),
+    #     [("amplitude", "value"), ("frequency", "value"), ("phase", "value"), ("dt", "value")],
+    # )
 
     # Run the server
     # You can access the dashboard at http://127.0.0.1:8050

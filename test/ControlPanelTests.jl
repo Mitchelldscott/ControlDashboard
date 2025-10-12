@@ -158,8 +158,6 @@ using ControlDashboard
     end
 end
 
-
-
 #--- get_interactive_components Test Suite ---
 
 @testset "get_interactive_components Tests" begin

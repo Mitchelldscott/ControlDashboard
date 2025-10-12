@@ -11,56 +11,63 @@ export make_control_panel,
 """
     build_component(config::Dict; component_style::Dict=Dict())
 
-Create a standard Dash UI component (`input`, `slider`, or `dropdown`) with an associated label.  
+Create a standard Dash UI component (`input`, `slider`, or `dropdown`) with an associated label.
 This internal factory function standardizes how configuration dictionaries map to Dash components, simplifying UI assembly.
 
 # Arguments
-- `config::Dict`: **Required.** Defines the component type and its properties (see Configuration Keys below).
-- `component_style::Dict`: **Optional.** Styles the outer `html_div` wrapper that contains the label and component. Defaults to `Dict()`.
+
+  - `config::Dict`: **Required.** Defines the component type and its properties (see Configuration Keys below).
+  - `component_style::Dict`: **Optional.** Styles the outer `html_div` wrapper that contains the label and component. Defaults to `Dict()`.
 
 # Returns
-- `html_div`:
-    - `html_label`: Label component centered above the interactive element.  
-    - `element`: Interactive Dash HTML component created from the `config` dictionary.
+
+  - `html_div`:
+
+      + `html_label`: Label component centered above the interactive element.
+      + `element`: Interactive Dash HTML component created from the `config` dictionary.
 
 # Configuration Keys
+
 The `config` dictionary must contain the following foundational keys:
 
-| Key           | Description |
-|---------------|----------|
+| Key           | Description                                                         |
+|:------------- |:------------------------------------------------------------------- |
 | `"component"` | Defines the component type: `"input"`, `"slider"`, or `"dropdown"`. |
-| `"label"`     | The text displayed above the component. |
-| `"id"`        | Unique component ID, required for Dash callbacks. |
+| `"label"`     | The text displayed above the component.                             |
+| `"id"`        | Unique component ID, required for Dash callbacks.                   |
 
----
+* * *
 
 ## Component-Specific Keys
 
 ### **Input**
-| Key | Default | Description |
-|------|----------|-------------|
+
+| Key       | Default    | Description                                       |
+|:--------- |:---------- |:------------------------------------------------- |
 | `"type"`  | `"number"` | The HTML input type (`"text"`, `"number"`, etc.). |
-| `"value"` | `0.0` | Initial input value. |
-| `"step"`  | `1e-5` | Step increment for numeric inputs. |
-| `"min"`   | `nothing` | Minimum allowable value. |
-| `"max"`   | `nothing` | Maximum allowable value. |
+| `"value"` | `0.0`      | Initial input value.                              |
+| `"step"`  | `1e-5`     | Step increment for numeric inputs.                |
+| `"min"`   | `nothing`  | Minimum allowable value.                          |
+| `"max"`   | `nothing`  | Maximum allowable value.                          |
 
 ### **Slider**
-| Key | Default | Description |
-|------|----------|-------------|
-| `"min"`   | `0.0` | Minimum slider value. |
-| `"max"`   | `1.0` | Maximum slider value. (Error if `min > max`.) |
-| `"step"`  | `0.1` | Step increment. |
+
+| Key       | Default        | Description                                        |
+|:--------- |:-------------- |:-------------------------------------------------- |
+| `"min"`   | `0.0`          | Minimum slider value.                              |
+| `"max"`   | `1.0`          | Maximum slider value. (Error if `min > max`.)      |
+| `"step"`  | `0.1`          | Step increment.                                    |
 | `"marks"` | *(Calculated)* | Dict of marks; defaults to 5 evenly spaced values. |
 
 ### **Dropdown**
-| Key | Default | Description |
-|------|----------|-------------|
-| `"options"` | `[]` | List of option dicts with `"label"` and `"value"` keys. |
-| `"value"`   | `""` | Initially selected value(s). |
-| `"multi"`   | `false` | Allow multiple selections if `true`. |
 
----
+| Key         | Default | Description                                             |
+|:----------- |:------- |:------------------------------------------------------- |
+| `"options"` | `[]`    | List of option dicts with `"label"` and `"value"` keys. |
+| `"value"`   | `""`    | Initially selected value(s).                            |
+| `"multi"`   | `false` | Allow multiple selections if `true`.                    |
+
+* * *
 
 # Example
 
@@ -72,12 +79,11 @@ slider_config = Dict(
     "min" => 50.0,
     "max" => 100.0,
     "step" => 0.5,
-    "value" => 75.0
+    "value" => 75.0,
 )
 ```
 """
 function build_component(config::Dict, component_style = Dict())
-
     ctype = get(config, "component", "input")
     label = get(config, "label", "")
     compid = config["id"]
@@ -89,7 +95,7 @@ function build_component(config::Dict, component_style = Dict())
     return html_div(
         [
             html_label(
-                label,
+                label;
                 style = Dict(
                     "display" => "block",       # ensures label sits above
                     "text-align" => "center",   # center label over component
@@ -98,7 +104,7 @@ function build_component(config::Dict, component_style = Dict())
                 ),
             ),
             component,
-        ],
+        ];
         style = component_style,
     )
 end
@@ -113,7 +119,7 @@ end
 
 # 1. Input Component (Dispatches on ::Val{:input})
 function build_component_ui(::Val{:input}, config::Dict, compid::AbstractString)
-    return dcc_input(
+    return dcc_input(;
         id = compid,
         type = get(config, "type", "number"),
         value = get(config, "value", 0.0),
@@ -137,9 +143,9 @@ function build_component_ui(::Val{:slider}, config::Dict, compid::AbstractString
     end
 
     # Calculate default marks if none are provided
-    marks = get(config, "marks", Dict(string(i)=>i for i = min_val:(range/5):max_val))
+    marks = get(config, "marks", Dict(string(i)=>i for i in min_val:(range / 5):max_val))
 
-    return dcc_slider(
+    return dcc_slider(;
         id = compid,
         min = min_val,
         max = max_val,
@@ -152,7 +158,7 @@ end
 
 # 3. Dropdown Component (Dispatches on ::Val{:dropdown})
 function build_component_ui(::Val{:dropdown}, config::Dict, compid::AbstractString)
-    return dcc_dropdown(
+    return dcc_dropdown(;
         id = compid,
         options = get(config, "options", []),
         value = get(config, "value", ""),
@@ -165,7 +171,7 @@ end
 
 # 4. Checkbox Component (Dispatches on ::Val{:checkbox})
 function build_component_ui(::Val{:checkbox}, config::Dict, compid::AbstractString)
-    return dcc_checklist(
+    return dcc_checklist(;
         id = compid,
         options = get(config, "options", []),
         value = get(config, "value", ""),
@@ -176,7 +182,7 @@ end
 # 5. DataTable Component (Dispatches on ::Val{:datatable})
 function build_component_ui(val::Val{:datatable}, config::Dict, compid::AbstractString)
     # Assumes DataTable is the Julia Dash component function name for dash_table.DataTable
-    return dash_datatable(
+    return dash_datatable(;
         id = compid,
         columns = get(config, "columns", []),
         data = get(config, "data", val),
@@ -201,13 +207,15 @@ end
 Build a flexible Dash panel of UI components.
 
 Each `config` is a `Dict` describing a component. Required keys:
-- `"component"` :: String, one of `"input"`, `"slider"`, `"dropdown"`, ...
-- `"label"`     :: String, label text
-- `"id"`        :: String, component id
+
+  - `"component"` :: String, one of `"input"`, `"slider"`, `"dropdown"`, ...
+  - `"label"`     :: String, label text
+  - `"id"`        :: String, component id
 
 Keywords:
-- `shape=(nrows, ncols)` → arrange components in a grid
-- `component_style`, `panel_style` → CSS dicts that specify the style of panels and components
+
+  - `shape=(nrows, ncols)` → arrange components in a grid
+  - `component_style`, `panel_style` → CSS dicts that specify the style of panels and components
 """
 function make_panel(
     configs::Vector{<:Dict};
@@ -215,38 +223,31 @@ function make_panel(
     component_style = Dict(),
     panel_style = Dict(),
 )
-    if shape[1] == 1
-        return [
-            build_component(config, component_style) for
-            config in configs if "id" in keys(config)
-        ]
-    else
-        nrows, ncols = shape
-        contents = [html_div([]) for _ = 1:(nrows*ncols)]
-        for config in configs
-            pos = get(config, "position", nothing)
-            if !("id" in keys(config))
-                continue
-            end
-            if pos !== nothing
-                i, j = pos
-                idx = (i-1)*ncols + j
-                contents[idx] = build_component(config, component_style)
-            else
-                empty_idx = findfirst(x -> isempty(x.children), contents)
-                if empty_idx !== nothing
-                    contents[empty_idx] = build_component(config, component_style)
-                end
+    nrows, ncols = shape
+    contents = [html_div([]) for _ in 1:(nrows * ncols)]
+    for config in configs
+        pos = get(config, "position", nothing)
+        if !("id" ∈ keys(config))
+            continue
+        end
+        if pos !== nothing
+            i, j = pos
+            idx = (i - 1) * ncols + j
+            contents[idx] = build_component(config, component_style)
+        else
+            empty_idx = findfirst(x -> isempty(x.children), contents)
+            if empty_idx !== nothing
+                contents[empty_idx] = build_component(config, component_style)
             end
         end
-        rows = []
-        for i = 1:nrows
-            start = (i-1)*ncols + 1
-            stop = i*ncols
-            push!(rows, html_div(contents[start:stop], style = panel_style))
-        end
-        return rows
     end
+    rows = []
+    for i in 1:nrows
+        start = (i-1)*ncols + 1
+        stop = i*ncols
+        push!(rows, html_div(contents[start:stop]; style = panel_style))
+    end
+    return rows
 end
 
 # The main function is now just a dispatcher
@@ -274,7 +275,7 @@ function set_component_config!(config::Dict, val::Number)
 end
 
 # --- Method for Strings and Symbols (combined with Union) ---
-function set_component_config!(config::Dict, val::Union{AbstractString,Symbol})
+function set_component_config!(config::Dict, val::Union{AbstractString, Symbol})
     config["component"] = "input"
     config["type"] = "text"
     config["value"] = string(val) # string() works for both
@@ -335,13 +336,15 @@ The function iterates through the fields of `params_struct`, creating a UI
 component (a `dcc_input` box) for each field.
 
 # Arguments
-- `params_struct`: An instance of a Julia struct.
-- `shape`: An optional `(rows, cols)` tuple to arrange the components in a grid.
-        If not provided, it defaults to a single column.
-- `component_style`, `panel_style`: Optional CSS style dictionaries passed to `make_panel`.
+
+  - `params_struct`: An instance of a Julia struct.
+  - `shape`: An optional `(rows, cols)` tuple to arrange the components in a grid.
+    If not provided, it defaults to a single column.
+  - `component_style`, `panel_style`: Optional CSS style dictionaries passed to `make_panel`.
 
 # Returns
-- A `Vector` of `html_div` components representing the panel.
+
+  - A `Vector` of `html_div` components representing the panel.
 """
 function make_control_panel(
     params_struct::T;
@@ -419,7 +422,7 @@ Remove duplicate values from a list of tuples, only checks the first element.
 """
 function deduplicate_interfaces(interfaces)
     seen = Set{String}()
-    deduped = Tuple{String,String}[]
+    deduped = Tuple{String, String}[]
     for (id, field) in interfaces
         if !(id ∈ seen)
             push!(deduped, (id, field))
@@ -435,14 +438,15 @@ end
 Return a vector of `(id, field)` pairs for all interactive components in the control panel.
 
 This function:
-- Recursively traverses nested `html_div` or `Component` elements.
-- Identifies components with an `:id` property.
-- Determines the correct field to read using `get_field_name(::Type)` dispatch.
+
+  - Recursively traverses nested `html_div` or `Component` elements.
+  - Identifies components with an `:id` property.
+  - Determines the correct field to read using `get_field_name(::Type)` dispatch.
 
 Useful for building Dash callback interfaces automatically.
 """
 function get_interactive_components(panel::Vector)
-    interfaces = Tuple{String,String}[]
+    interfaces = Tuple{String, String}[]
     for element in panel
         if element isa Component
             component_name = lowercase(String(getfield(element, 1)))
