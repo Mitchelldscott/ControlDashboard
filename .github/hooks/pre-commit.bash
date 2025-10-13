@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Pre-commit hook to format Julia code automatically
+
+set -e
+
+echo "🔧 Running JuliaFormatter..."
+
+# Ensure we’re in repo root (in case of partial commits)
+cd "$(git rev-parse --show-toplevel)"
+
+# Run JuliaFormatter with your configuration
+julia --color=yes -e '
+using Pkg; Pkg.activate("."); 
+Pkg.instantiate();
+using JuliaFormatter;
+if !format(".", verbose=true; config_file=".JuliaFormatter.toml")
+    @info "Package automatically formatted"
+end
+'
+
+# Add any newly formatted files back to the commit
+if [[ -n $(git diff --name-only) ]]; then
+    echo "✨ Re-adding formatted files..."
+    git add $(git diff --name-only)
+fi
+
+echo "✅ Formatting done. Proceeding with commit."

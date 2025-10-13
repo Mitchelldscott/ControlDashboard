@@ -27,6 +27,6 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         @test df.time[end] ≈ 1.0
 
         # Analytical solution at t=1: exp(-1) ≈ 0.3679
-        @test df.x1[end] ≈ exp(-1) atol=1e-3
+        @test df.x1[end] ≈ exp(-1) atol = 1e-3
     end
 end
