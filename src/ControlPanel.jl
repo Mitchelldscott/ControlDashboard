@@ -83,7 +83,7 @@ slider_config = Dict(
 )
 ```
 """
-function build_component(config::Dict, component_style = Dict())
+function build_component(config::Dict, component_style = Dict(), label_style = Dict())
     ctype = get(config, "component", "input")
     label = get(config, "label", "")
     compid = config["id"]
@@ -96,12 +96,7 @@ function build_component(config::Dict, component_style = Dict())
         [
             html_label(
                 label;
-                style = Dict(
-                    "display" => "block",       # ensures label sits above
-                    "text-align" => "center",   # center label over component
-                    "margin-bottom" => "6px",
-                    "font-weight" => "bold",
-                ),
+                style = label_style,
             ),
             component,
         ];
@@ -128,7 +123,7 @@ function build_component_ui(::Val{:input}, config::Dict, compid::AbstractString)
         inputMode = get(config, "inputmode", "numeric"),
         min = get(config, "min", nothing),
         max = get(config, "max", nothing),
-        style = Dict("width"=>"140px"),
+        style = Dict("width" => "140px"),
     )
 end
 
@@ -143,7 +138,7 @@ function build_component_ui(::Val{:slider}, config::Dict, compid::AbstractString
     end
 
     # Calculate default marks if none are provided
-    marks = get(config, "marks", Dict(string(i)=>i for i in min_val:(range / 5):max_val))
+    marks = get(config, "marks", Dict(string(i) => i for i in min_val:(range / 5):max_val))
 
     return dcc_slider(;
         id = compid,
@@ -152,7 +147,7 @@ function build_component_ui(::Val{:slider}, config::Dict, compid::AbstractString
         step = get(config, "step", 0.1),
         value = get(config, "value", min_val),
         marks = marks,
-        tooltip = Dict("always_visible"=>true),
+        tooltip = Dict("always_visible" => true),
     )
 end
 
@@ -165,7 +160,7 @@ function build_component_ui(::Val{:dropdown}, config::Dict, compid::AbstractStri
         clearable = get(config, "clearable", true),
         searchable = get(config, "searchable", true),
         multi = get(config, "multi", false),
-        style = Dict("width"=>"160px"),
+        style = Dict("width" => "160px"),
     )
 end
 
@@ -175,7 +170,7 @@ function build_component_ui(::Val{:checkbox}, config::Dict, compid::AbstractStri
         id = compid,
         options = get(config, "options", []),
         value = get(config, "value", ""),
-        style = Dict("width"=>"160px"),
+        style = Dict("width" => "160px"),
     )
 end
 
@@ -212,6 +207,8 @@ Each `config` is a `Dict` describing a component. Required keys:
   - `"label"`     :: String, label text
   - `"id"`        :: String, component id
 
+> If `"position"` is not specified the function will find the first emtpy index (searches left->right, top->bottom)
+
 Keywords:
 
   - `shape=(nrows, ncols)` → arrange components in a grid
@@ -221,36 +218,47 @@ function make_panel(
     configs::Vector{<:Dict};
     shape = (1, length(configs)),
     component_style = Dict(),
+    label_style = Dict(),
     panel_style = Dict(),
+    row_style = Dict(),
 )
     nrows, ncols = shape
-    contents = [html_div([]) for _ in 1:(nrows * ncols)]
+    # Initialize a 2D array of empty divs
+    contents = fill(html_div(), nrows * ncols)
+
     for config in configs
-        pos = get(config, "position", nothing)
-        if !("id" ∈ keys(config))
+        # Skip configs without an id
+        if !haskey(config, "id")
+            @warn "Skipping component configuration because it lacks an 'id':" config
             continue
         end
-        if pos !== nothing
-            i, j = pos
-            idx = (i - 1) * ncols + j
-            contents[idx] = build_component(config, component_style)
-        else
-            empty_idx = findfirst(x -> isempty(x.children), contents)
-            if empty_idx !== nothing
-                contents[empty_idx] = build_component(config, component_style)
-            end
+
+        # If no position is specified find the first emtpy index (searches left->right, top->bottom)
+        pos =
+            haskey(config, "position") ?
+            (config["position"][1] - 1) * ncols + config["position"][2] :
+            findfirst(x -> isnothing(x.children), contents)
+        if pos === nothing
+            @warn "Control Panel out of space, too many components for the given shape"
+            break
         end
+        # Build the specified component
+        contents[pos] = build_component(config, component_style, label_style)
     end
-    rows = []
-    for i in 1:nrows
-        start = (i-1)*ncols + 1
-        stop = i*ncols
-        push!(rows, html_div(contents[start:stop]; style = panel_style))
-    end
-    return rows
+    rows = [
+        html_div(
+            [contents[(i - 1) * ncols + j] for j in 1:ncols];
+            style = row_style,
+        )
+        for i in 1:nrows
+    ]
+    return html_div(
+        rows;
+        id = "ControlPanel",
+        style = panel_style,
+    )
 end
 
-# The main function is now just a dispatcher
 """
     infer_field_type!(config::Dict, val::Any) -> Dict
 
@@ -313,7 +321,6 @@ function set_component_config!(config::Dict, val::AbstractVector)
 end
 
 # --- Method for Enums ---
-# Note: This is improved to correctly configure a dcc_slider
 function set_component_config!(config::Dict, val::Enum)
     instances_list = instances(typeof(val))
     config["component"] = "slider"
@@ -399,8 +406,8 @@ Users can supply their own instead.
 """
 function sample_time_and_duration_sliders(component_style = Dict(), panel_style = Dict())
     comps = [
-        Dict("component"=>"input", "label"=>"Sample Time", "id"=>"dt"),
-        Dict("component"=>"input", "label"=>"Duration", "id"=>"t"),
+        Dict("component" => "input", "label" => "Sample Time", "id" => "dt"),
+        Dict("component" => "input", "label" => "Duration", "id" => "t"),
     ]
     make_panel(comps; component_style = component_style, panel_style = panel_style)
 end
@@ -416,14 +423,16 @@ function get_field_name(component_name)
 end
 
 """
-    deduplicate_interfaces(interfaces)
+    deduplicate_vector_tuple(vector_tuple)
 
-Remove duplicate values from a list of tuples, only checks the first element.
+Remove duplicate values from a list of tuples.
+
+> only checks if the first element is unique
 """
-function deduplicate_interfaces(interfaces)
-    seen = Set{String}()
+function deduplicate_vector_tuple(vector_tuple)
+    seen = Set()
     deduped = Tuple{String, String}[]
-    for (id, field) in interfaces
+    for (id, field) in vector_tuple
         if !(id ∈ seen)
             push!(deduped, (id, field))
             push!(seen, id)
@@ -434,44 +443,45 @@ end
 
 """
     get_interactive_components(panel::Vector)
+    get_interactive_components(panel::Component)
 
 Return a vector of `(id, field)` pairs for all interactive components in the control panel.
 
 This function:
 
+  - Accepts either a single `Component` or a vector of components.
   - Recursively traverses nested `html_div` or `Component` elements.
   - Identifies components with an `:id` property.
   - Determines the correct field to read using `get_field_name(::Type)` dispatch.
 
 Useful for building Dash callback interfaces automatically.
 """
-function get_interactive_components(panel::Vector)
-    interfaces = Tuple{String, String}[]
-    for element in panel
-        if element isa Component
-            component_name = lowercase(String(getfield(element, 1)))
-            # Collect (id, field) pairs for interactive components
-            if hasproperty(element, :id) && !isnothing(element.id) && !isempty(element.id)
-                id = String(element.id)
-                field = get_field_name(component_name)
-                if length(field) > 0
-                    push!(interfaces, (id, field))
-                end
-            end
-            # Recurse through children if present
-            if hasproperty(element, :children) && !isempty(element.children)
-                children =
-                    element.children isa AbstractVector ?
-                    collect(Iterators.flatten([element.children])) : []
-                child_info = get_interactive_components(children)
-                if length(child_info) > 0
-                    append!(interfaces, child_info)
-                end
-            end
+function get_interactive_components(panel::Component)
+    results = []
+
+    # If the component itself is interactive
+    if hasproperty(panel, :id) && !isnothing(panel.id) && !isempty(panel.id)
+        component_name = lowercase(string(getfield(panel, 1)))
+        field = get_field_name(component_name)
+        if length(field) > 0
+            push!(results, (panel.id, field))
         end
     end
 
-    return deduplicate_interfaces(interfaces)
+    # Recursively check children (if they exist)
+    if hasproperty(panel, :children) && panel.children isa AbstractVector
+        # Flatten all children to avoid deep recursions
+        flattened_children = collect(Iterators.flatten([panel.children]))
+        child_results = get_interactive_components(flattened_children)
+        append!(results, child_results)
+    end
+
+    return deduplicate_vector_tuple(results)
+end
+
+# Alternate method for vectors of components
+function get_interactive_components(panel::AbstractVector)
+    return deduplicate_vector_tuple(vcat([get_interactive_components(p) for p in panel]...))
 end
 
 end # module

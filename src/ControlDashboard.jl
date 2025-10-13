@@ -46,19 +46,19 @@ Create and initialize a Dash application layout with a title, control panel, and
 function initialize_dashboard(
     title::AbstractString;
     title_style::Dict = Dict("textAlign" => "center"),
-    control_panel::AbstractVector = sample_time_and_duration_sliders(),
-    views::AbstractVector = [dcc_graph(id = "main_view")],
+    control_panel::Component = sample_time_and_duration_sliders(),
+    views::Component = html_div(dcc_graph(; id = "main_view")),
     external_stylesheets::AbstractVector = [
         "https://bootswatch.com/5/darkly/bootstrap.min.css",
     ],
 )
     app = dash(; external_stylesheets = external_stylesheets)
 
-    app.layout = html_div() do
+    app.layout = html_div([
         html_h1(title; style = title_style),
-        control_panel,  # Control Panel
-        views...    # vizualizations
-    end
+        control_panel,                  # Control Panel
+        views,                          # vizualizations
+    ])
 
     return app
 end
@@ -104,8 +104,8 @@ function set_callbacks!(
             app,
             Output(figure_name, "figure"),
             [Input(name, field) for (name, field) in interfaces],
-        ) do interfaces...
-            df = (run_simulation ∘ state_factory)(interfaces)
+        ) do control_input...
+            df = (run_simulation ∘ state_factory)(control_input)
             return renderer(df)
         end
     end
@@ -148,7 +148,7 @@ function run_dashboard(
     renderers::AbstractDict;
     host::AbstractString = "127.0.0.1",
     port::Integer = 8050,
-    views::AbstractVector = [dcc_graph(id = "main_view")],
+    views::AbstractVector = [dcc_graph(; id = "main_view")],
     external_stylesheets::AbstractVector = [
         "https://bootswatch.com/5/darkly/bootstrap.min.css",
     ],

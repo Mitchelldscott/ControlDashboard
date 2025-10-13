@@ -2,7 +2,6 @@ using Dash,
     DataFrames,
     PlotlyJS,
     StaticArrays,
-    LinearAlgebra,
     DifferentialEquations,
     ControlDashboard,
     ControlDashboard.ControlPanel
@@ -45,10 +44,10 @@ struct QuadcopterSimParameters
         kf = 1e-5,
         km = 2e-6,
         motor_positions = SVector(
-            SVector(L/√2, L/√2, 0.0),   # M1: +x, +y
-            SVector(L/√2, -L/√2, 0.0),   # M2: +x, -y
-            SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
-            SVector(-L/√2, L/√2, 0.0),    # M4: -x, +y
+            SVector(L / √2, L / √2, 0.0),   # M1: +x, +y
+            SVector(L / √2, -L / √2, 0.0),   # M2: +x, -y
+            SVector(-L / √2, -L / √2, 0.0),   # M3: -x, -y
+            SVector(-L / √2, L / √2, 0.0),    # M4: -x, +y
         ),
         spin_dirs = SVector(1, -1, 1, -1),
     )
@@ -305,8 +304,8 @@ function relative_motor_positions(φ, θ, ψ, motor_positions)
     cφ, sφ = cos(φ), sin(φ)
 
     R_IB = @SMatrix [
-        cθ*cψ sφ*sθ*cψ - cφ*sψ cφ*sθ*cψ + sφ*sψ;
-        cθ*sψ sφ*sθ*sψ + cφ*cψ cφ*sθ*sψ - sφ*cψ;
+        cθ*cψ sφ * sθ * cψ-cφ * sψ cφ * sθ * cψ+sφ * sψ;
+        cθ*sψ sφ * sθ * sψ+cφ * cψ cφ * sθ * sψ-sφ * cψ;
         -sθ sφ*cθ cφ*cθ
     ]
 
@@ -343,9 +342,9 @@ function animate_quadcopter(
         scene = attr(;
             aspectmode = "manual",   # don't auto-stretch
             aspectratio = attr(; x = 1, y = 1, z = 1),  # equal scaling
-            xaxis = attr(; range = [-3*wing_length, 3*wing_length]),
-            yaxis = attr(; range = [-3*wing_length, 3*wing_length]),
-            zaxis = attr(; range = [-3*wing_length, 3*wing_length]),
+            xaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
+            yaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
+            zaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
         ),
         updatemenus = [
             attr(;

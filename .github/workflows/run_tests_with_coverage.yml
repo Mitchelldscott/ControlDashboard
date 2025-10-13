@@ -41,7 +41,7 @@ jobs:
         run: julia --project=. test/CodeCoverage.jl
 
       - name: Upload coverage to Codecov
-        if: ${{ github.ref == 'refs/heads/master' }}
+        if: ${{ github.ref == 'refs/heads/master' }} && ${{ matrix.version == '1.11' }}
         uses: codecov/codecov-action@v5
         with:
           files: "lcov.info"
