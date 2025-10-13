@@ -33,4 +33,4 @@ disallow_single_arg_nesting = false
 yas_style_nesting = false
 
 # Ignore some files if you want:
-ignore = ["*.toml", "*.md", "LICENSE", ".git/", ".gitignore"]
+# ignore = ["*.toml", "*.md", "LICENSE", ".git/", ".gitignore"]
