@@ -1,0 +1,182 @@
+name: ControlDashboard CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  setup:
+    name: Julia ${{ matrix.version }} Test Suite
+    runs-on: ubuntu-latest
+    
+    # Define the matrix of Julia versions to test against
+    strategy:
+      matrix:
+        version: ['1.10', '1.11', '1.12.0-rc3']
+
+    steps:
+      - name: Reusable Julia Environment Setup
+        # Calls the composite action located in .github/actions/setup-julia-project/
+        # This single step replaces Checkout, Setup Julia, Cache, and Install Dependencies.
+        uses: ./.github/actions/setup-julia-project
+        with:
+          julia-version: ${{ matrix.version }}
+   
+  test:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Run Tests
+        shell: bash
+        run: | 
+          echo "Running tests for Julia 1.11 ..."
+          julia --project=. -e 'using Pkg; Pkg.test()'
+
+  code-coverage:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: "lcov.info"
+          fail_ci_if_error: false
+
+  documentation:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Build and deploy documentation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JULIA_DEBUG: Documenter 
+        run: |
+          julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate();'
+          julia --project=docs docs/make.jl
+      - name: Upload docs artifact
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/
+
+
+# name: Code Coverage Pipeline
+
+# on:
+#   push:
+#     branches: [master]
+#   pull_request:
+#     branches: [master]
+
+# permissions:
+#   actions: write
+#   contents: read
+
+# jobs:
+#   test:
+#     name: Julia 1.11 Code Coverage
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Julia
+#         uses: julia-actions/setup-julia@v2
+#         with:
+#           version: 1.11
+
+#       - name: Cache dependencies
+#         uses: julia-actions/cache@v1
+
+#       - name: Install dependencies
+#         run: | 
+#           rm -f Manifest.toml 
+#           julia --project=. -e 'using Pkg; Pkg.instantiate();'
+
+#       - name: Upload coverage to Codecov
+#         uses: codecov/codecov-action@v5
+#         with:
+#           files: "lcov.info"
+#           fail_ci_if_error: false
+
+# name: Documentation Deployment Pipeline
+
+# on:
+#   push:
+#     branches: [master]
+
+# permissions:
+#   actions: write
+#   contents: read
+#   pages: write
+#   id-token: write
+
+# jobs:
+#   build:
+#     name: Dashboard Documentation
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Cache dependencies
+#         uses: julia-actions/cache@v1
+
+#       - name: Set up Julia
+#         uses: julia-actions/setup-julia@v2
+#         with:
+#           version: 1.11
+
+#       - name: Install dependencies
+#         run: | 
+#           rm -f Manifest.toml 
+#           julia --project=. -e 'using Pkg; Pkg.instantiate();'
+            
+#       - name: Build and deploy documentation
+#         env:
+#           # The GITHUB_TOKEN is required for Documenter.jl to push the built HTML to gh-pages.
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           # Set JULIA_DEBUG=Documenter for more verbose logs during the doc build
+#           JULIA_DEBUG: Documenter 
+#         run: |
+#           julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate();'
+#           julia --project=docs docs/make.jl
+
+#       - name: Upload static files as artifact
+#         id: deployment
+#         uses: actions/upload-pages-artifact@v3
+#         with:
+#           path: docs/build/
+
+  # Deployment job
+  # deploy:
+  #   name: Deploy Documentation
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - name: Deploy to GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v4
