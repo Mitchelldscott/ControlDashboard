@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Reusable Julia Environment Setup
         # Calls the composite action located in .github/actions/julia-project-setup/
-        # This single step replaces Checkout, Setup Julia, Cache, and Install Dependencies.
+        # This single step replaces Setup Julia, Cache, and Install Dependencies.
         uses: ./.github/actions/julia-project-setup
         with:
           julia-version: ${{ matrix.version }}
