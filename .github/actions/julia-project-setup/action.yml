@@ -8,9 +8,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
     - name: Set up Julia ${{ inputs.julia-version }}
       uses: julia-actions/setup-julia@v2
       with:
