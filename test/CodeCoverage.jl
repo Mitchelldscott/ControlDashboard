@@ -1,7 +1,6 @@
-using Pkg
-
-Pkg.add("Coverage", "Dates");
+using Pkg;
 Pkg.instatiate();
+Pkg.add("Coverage", "Dates");
 
 using Coverage, Dates
 
