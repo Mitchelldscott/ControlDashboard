@@ -1,5 +1,7 @@
 using Pkg, Coverage, Dates
 
+Pkg.instatiate()
+
 # Run your tests with coverage enabled
 Pkg.test("ControlDashboard"; coverage = true)
 
