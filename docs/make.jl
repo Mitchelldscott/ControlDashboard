@@ -25,8 +25,8 @@ makedocs(;
     ],
 )
 
-deploydocs(;
-    repo = "github.com/MitchellDScott/ControlDashboard.git",
-    devbranch = "master",
-    push_preview = true,
-)
+# deploydocs(;
+#     repo = "github.com/MitchellDScott/ControlDashboard.git",
+#     devbranch = "master",
+#     push_preview = true,
+# )
