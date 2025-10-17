@@ -3,7 +3,7 @@ include("ControlPanelTests.jl")
 include("SimulationTests.jl")
 
 using Test
-using Dates   # for timeout calculation
+using Dates
 
 @testset "Example scripts" begin
     example_file = joinpath(@__DIR__, "..", "examples", "sinusoid.jl")
