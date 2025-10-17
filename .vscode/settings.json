@@ -10,7 +10,6 @@
   "julia.lint.constif": true,
   "julia.lint.disabledDirs": [
     "docs",
-    "examples",
     "Manifest.toml",
     "Project.toml",
     ".git",
