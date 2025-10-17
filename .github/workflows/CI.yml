@@ -36,7 +36,7 @@ jobs:
       - name: Cache dependencies
         uses: julia-actions/cache@v1
         with:
-          cache-name: julia_${{ matrix.version }}_cache
+          cache-name: julia_cache
 
       - name: Install dependencies
         shell: bash
@@ -51,25 +51,6 @@ jobs:
         run: | 
           echo "Running tests for Julia ${{ matrix.version }} ..."
           julia --project=. test/CodeCoverage.jl
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: lcov-${{ matrix.version }}
-          path: lcov.info
-
-  upload-codecov:
-    needs: test-with-coverage
-    runs-on: ubuntu-latest
-    if: ${{ needs.test-with-coverage.result == 'success' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: lcov-1.11
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -87,7 +68,7 @@ jobs:
       - name: Cache dependencies
         uses: julia-actions/cache@v1
         with:
-          cache-name: julia_1.11_cache
+          cache-name: julia_cache
 
       - name: Build and deploy documentation
         working-directory: ${{ github.workspace }}
