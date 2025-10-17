@@ -1,7 +1,6 @@
-
 using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
-include("../src/ControlDashboard.jl")
-using ControlDashboard.Simulation
+include("../src/Simulation.jl")
+
 @testset "Simulation tests" begin
     @testset "ode_simulation tests" begin
         # Define a simple scalar ODE: du/dt = -u, solution u(t) = exp(-t)
