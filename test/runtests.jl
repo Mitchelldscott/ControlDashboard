@@ -9,7 +9,7 @@ using Dates   # for timeout calculation
     example_file = joinpath(@__DIR__, "..", "examples", "sinusoid.jl")
     timeout_seconds = 5  # adjust as needed
 
-    @testset "Run example_server.jl" begin
+    @testset "Run sinusoid_server.jl" begin
         ex_task = @async include(example_file)
 
         start_time = now()
