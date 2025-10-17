@@ -2,8 +2,7 @@ using Dash,
     DataFrames,
     PlotlyJS,
     StaticArrays,
-    DifferentialEquations,
-    LinearAlgebra
+    DifferentialEquations
 
 using ControlDashboard
 using ControlDashboard.ControlPanel
