@@ -89,7 +89,6 @@ If `figures` or `interfaces` are empty, no callbacks are registered.
 """
 function set_callbacks!(
     app,
-    state_factory::Function,
     run_simulation::Function,
     figures::AbstractDict,
     interfaces::AbstractVector,
@@ -105,7 +104,7 @@ function set_callbacks!(
             Output(figure_name, "figure"),
             [Input(name, field) for (name, field) in interfaces],
         ) do control_input...
-            df = (run_simulation ∘ state_factory)(control_input)
+            df = run_simulation(control_input)
             return renderer(df)
         end
     end
@@ -142,13 +141,12 @@ Launch an interactive Dash-based simulation dashboard that connects UI controls 
 """
 function run_dashboard(
     title::AbstractString,
-    control_panel::AbstractVector,
-    initialize_sim::Function,
-    simulate::Function,
+    control_panel::Component,
+    simulation::Function,
     renderers::AbstractDict;
     host::AbstractString = "127.0.0.1",
     port::Integer = 8050,
-    views::AbstractVector = [dcc_graph(; id = "main_view")],
+    views::Component = html_div(dcc_graph(; id = "main_view")),
     external_stylesheets::AbstractVector = [
         "https://bootswatch.com/5/darkly/bootstrap.min.css",
     ],
@@ -165,8 +163,7 @@ function run_dashboard(
     # Step 2: Register simulation and renderer callbacks
     set_callbacks!(
         app,
-        initialize_sim,
-        simulate,
+        simulation,
         renderers,
         get_interactive_components(control_panel),
     )

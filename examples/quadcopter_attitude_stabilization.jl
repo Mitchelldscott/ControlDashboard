@@ -3,8 +3,10 @@ using Dash,
     PlotlyJS,
     StaticArrays,
     DifferentialEquations,
-    ControlDashboard,
-    ControlDashboard.ControlPanel
+    LinearAlgebra
+
+using ControlDashboard
+using ControlDashboard.ControlPanel
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]
@@ -37,7 +39,7 @@ struct QuadcopterSimParameters
         kp = 0.05,
         ki = 0.0,
         kd = 0.025,
-        integrator_error = SVector(0.0, 0.0, 0.0),
+        integrator = SVector(0.0, 0.0, 0.0),
         m = 0.05,
         g = 9.81,
         L = 0.1,
@@ -51,7 +53,7 @@ struct QuadcopterSimParameters
         ),
         spin_dirs = SVector(1, -1, 1, -1),
     )
-        new(
+        return new(
             t_final,
             dt,
             rpy,
@@ -62,7 +64,7 @@ struct QuadcopterSimParameters
             kp,
             ki,
             kd,
-            integrator_error,
+            integrator,
             m,
             g,
             L,
@@ -74,6 +76,8 @@ struct QuadcopterSimParameters
     end
 end
 
+const SIM_SETTINGS = Ref{QuadcopterSimParameters}(QuadcopterSimParameters())
+
 """
     control_torque!(state, integral_error, kp, ki, kd) -> SVector{3,Float64}
 
@@ -84,8 +88,8 @@ with proportional (`kp`), integral (`ki`), and derivative (`kd`) gains.
 
   - `state` :: `SVector{6,Float64}`
     The quadcopter attitude state vector:
-    `["roll", "pitch", "yaw", "p", "q", "r"]`
-    where `(roll, pitch, yaw)` are Euler angles [rad], and `(p, q, r)` are angular rates [rad/s].
+    `["φ", "θ", "yaw", "p", "q", "r"]`
+    where `(φ, θ, yaw)` are Euler angles [rad], and `(p, q, r)` are angular rates [rad/s].
   - `integral_error` :: `SVector{3,Float64}`
     Accumulated integral of attitude errors `[∫roll_err, ∫pitch_err, ∫yaw_err]`.
   - `kp`, `ki`, `kd` :: `SVector{3,Float64}` or scalar
@@ -114,20 +118,10 @@ This function forms the **attitude controller** in the quadcopter feedback loop,
 stabilizing the vehicle around the desired orientation.
 """
 function control_torque!(state, integral_error, kp, ki, kd)
-    # state = ["roll", "pitch", "yaw", "p", "q", "r"]
-    roll, pitch, yaw, p, q, r = state
-
-    # Reference is zero, so error is just -state angles
-    # Also pretends that there is no yaw sensor (usually there isn't)
-    err = @SVector [-roll, -pitch, 0]
-
-    # Derivative error = -angular rates (p,q,r)
+    φ, θ, _, p, q, r = state
+    err = @SVector [-φ, -θ, 0]
     derr = @SVector [-p, -q, -r]
-
-    # Update integral error
     integral_error = integral_error .+ err
-
-    # PID control law
     return kp .* err + ki .* integral_error + kd .* derr
 end
 
@@ -160,18 +154,16 @@ function motor_mixing(thrust, τ_control, params)
     kf, km = params.kf, params.km
     spin_dirs = params.spin_dirs
 
-    # Build mixing matrix dynamically
-    mixing = zeros(4, 4)
-    for i in 1:4
-        τ_i = cross(P[i], SVector(0, 0, kf))
-        mixing[1, i] = kf
-        mixing[2, i] = τ_i[1]
-        mixing[3, i] = τ_i[2]
-        mixing[4, i] = spin_dirs[i] * km
-    end
+    τ = cross.(P, Ref(SVector(0.0, 0.0, kf)))   # τ_i = cross(P[i], [0,0,kf])
+    mixing = @SMatrix [
+        kf kf kf kf;
+        τ[1][1] τ[2][1] τ[3][1] τ[4][1];
+        τ[1][2] τ[2][2] τ[3][2] τ[4][2];
+        spin_dirs[1]*km spin_dirs[2]*km spin_dirs[3]*km spin_dirs[4]*km
+    ]
 
     # Solve for squared speeds
-    ω_sq = mixing \ SVector(thrust, τx, τy, τz)
+    ω_sq = pinv(mixing) * SVector{4}(thrust, τx, τy, τz)
     return map(x -> max(0.0, x), ω_sq)
 end
 
@@ -202,18 +194,12 @@ function aerodynamics(w, params)
     motor_positions = params.motor_positions
     spin_dirs = params.spin_dirs
 
-    τ = SVector{3, Float64}(0.0, 0.0, 0.0)
     F_z = 0.0 # no gravity
-
-    for i in 1:4
-        ω² = w[i]^2
-        Ti = kf * ω²
-        Mi = km * ω² * spin_dirs[i]
-
-        # Accumulate total thrust
-        F_z += Ti
-        τ += cross(motor_positions[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
-    end
+    w2 = w .^ 2  # element-wise square
+    T = kf .* w2                     # thrust per motor
+    M = km .* w2 .* spin_dirs        # moment per motor
+    F_z = sum(T)                      # scalar
+    τ = sum(cross.(motor_positions, @. SVector(0.0, 0.0, T)) .+ SVector.(0.0, 0.0, M))
 
     return F_z, τ
 end
@@ -229,7 +215,7 @@ Rigid-body rotational dynamics for a quadcopter.
 """
 function attitude_dynamics!(du, u, params, t)
     # State extraction
-    φ, θ, _ψ, p, q, r = u
+    φ, θ, _, p, q, r = u
 
     # Parameters extraction
     I_x, I_y, I_z = params.I_diag
@@ -239,11 +225,11 @@ function attitude_dynamics!(du, u, params, t)
     integrator = params.integrator
     spin_dirs = params.spin_dirs
 
-    # Delay controls (simulate startup)
+    # Delay controls (simulate startup time)
     if t > 2.0
         τ_control = control_torque!(u, integrator, kp, ki, kd)
         ωs = motor_mixing(0.0, τ_control, params) # add throttle for altitude ctrl
-        F, (τx, τy, τz) = aerodynamics(ωs, params)
+        _, (τx, τy, τz) = aerodynamics(ωs, params)
     else
         ωs = (0.0, 0.0, 0.0, 0.0)
         (τx, τy, τz) = (0.0, 0.0, 0.0)
@@ -328,11 +314,10 @@ Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
 function animate_quadcopter(
     df;
-    params = QuadcopterSimParameters(),
+    params = SIM_SETTINGS[],
     template = "plotly_dark",
     frame_duration = 50,
 )
-    @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
     wing_length = params.L
     quad_color = "black"
     prop_color = ["orange"; fill("red", 3)...]
@@ -435,69 +420,125 @@ end
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
     return make_control_panel(
-        QuadcopterSimParameters();
-        shape = (3, 6),
-        panel_style = Dict("display" => "flex", "alignItems" => "center"),
+        SIM_SETTINGS[];
+        component_style = Dict(
+            "width" => "100%",
+            "display" => "flex",
+            "flex-direction" => "column",
+            "align-items" => "stretch",
+            "justify-content" => "center",
+            "color" => "black",
+            "padding" => "6px",
+            "box-sizing" => "border-box",
+        ),
+        label_style = Dict(
+            "font-weight" => "bold",
+            "text-align" => "center",
+            "margin-bottom" => "6px",
+            "font-size" => "14px",
+            "color" => "black",
+            "display" => "block",
+        ),
+        panel_style = Dict(
+            "display" => "grid",
+            "grid-template-columns" => "repeat(6, 1fr)",  # 6 equal-width columns
+            "grid-template-rows" => "repeat(3, auto)",    # 3 rows auto-sized
+            "gap" => "16px",
+            "width" => "100%",
+            "height" => "auto",
+            "padding" => "24px",
+            "box-sizing" => "border-box",
+            "background-color" => "#f8f8f8",
+            "border-radius" => "12px",
+            "box-shadow" => "0 4px 12px rgba(0, 0, 0, 0.1)",
+            "justify-items" => "stretch",
+            "align-items" => "start",
+        ),
     )
 end
 
 """
-    initial_state(interfaces::Dict{String, Float64}) -> t_final, dt, x0, params, state_names
+    quadcopter_simulation(interfaces::Dict{String, Float64}) -> t_final, dt, x0, params, state_names
 
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initialize_sim(inputs::NTuple{18, Any})
-    names = (
-        :t_final,
-        :dt,
-        :rpy_table,
-        :pqr_table,
-        :I_diag_table,
-        :J_r,
-        :Ar,
-        :kp,
-        :ki,
-        :kd,
-        :integrator_error_table,
-        :m,
-        :g,
-        :L,
-        :kf,
-        :km,
-        :motor_position_table,
-        :spin_dir_table,
-    )
+function quadcopter_simulation(inputs::NTuple{18, Any})
+    names = fieldnames(QuadcopterSimParameters)
 
     # Convert to named tuple for clarity
     kwargs = (; zip(names, inputs)...)
 
-    # Fill in missing (nothing) entries
-    # params_kw = merge(defaults, map(v -> isnothing(v[2]) ? (v[1] => get(defaults, v[1], v[2])) : v, pairs(kwargs)))
+    # For 1D vector table
+    function read_num_vector(table)
+        SVector{length(table)}([row[first(keys(row))] for row in table])
+    end
 
-    params = QuadcopterSimParameters(; params_kw...)
+    # For 2D table (matrix)
+    function read_num_matrix(table)
+        colnames = collect(keys(first(table)))
+        nrows = length(table)
+        ncols = length(colnames)
+        SVector{nrows}(
+            SVector{ncols}(row[name] for name in sort(colnames)) for
+            row in table
+        )
+    end
 
+    # Process each table into a simple SVector
+    rpy = read_num_vector(kwargs.rpy)
+    pqr = read_num_vector(kwargs.pqr)
+    I_diag = read_num_vector(kwargs.I_diag)
+    integrator = read_num_vector(kwargs.integrator)
+    spin_dirs = read_num_vector(kwargs.spin_dirs)
+
+    # Assuming motor_position contains vectors
+    motor_positions = read_num_matrix(kwargs.motor_positions)
+    # --- End Data Extraction ---
+
+    # Construct the parameters struct using the corrected variable names and extracted data
+    SIM_SETTINGS[] = QuadcopterSimParameters(;
+        t_final = kwargs.t_final,
+        dt = kwargs.dt,
+        rpy = rpy,
+        pqr = pqr,
+        I_diag = I_diag,
+        J_r = kwargs.J_r,
+        Ar = kwargs.Ar,
+        kp = kwargs.kp,
+        ki = kwargs.ki,
+        kd = kwargs.kd,
+        integrator = integrator,
+        m = kwargs.m,
+        g = kwargs.g,
+        L = kwargs.L,
+        kf = kwargs.kf,
+        km = kwargs.km,
+        motor_positions = motor_positions,
+        spin_dirs = spin_dirs,
+    )
+
+    # Initial state vector [phi, theta, psi, p, q, r]
+    # Note: The constructor expects degrees for rpy, so we use the extracted values directly.
+    # The deg2rad conversion is now done here for the initial state.
     x0 = [
-        deg2rad(params.rpy[1]),
-        deg2rad(params.rpy[2]),
-        deg2rad(params.rpy[3]),
-        params.pqr[1],
-        params.pqr[2],
-        params.pqr[3],
+        deg2rad(rpy[1]),
+        deg2rad(rpy[2]),
+        deg2rad(rpy[3]),
+        pqr[1],
+        pqr[2],
+        pqr[3],
     ]
 
-    return params, x0
-end
-
-function quadcopter_simulation((params, x0))
     @info "Running Simulation"
+
     # run sim with RK4
     rk4_simulation(
         attitude_dynamics!,
         x0;
-        t_final = params.t_final,
-        dt = params.dt,
-        params = params,
+        t_final = kwargs.t_final,
+        dt = kwargs.dt,
+        params = SIM_SETTINGS[],
         state_names = ["roll", "pitch", "yaw", "p", "q", "r"],
     )
 end
@@ -507,7 +548,6 @@ function main()
     run_dashboard(
         "Quadcopter Attitude Stabilizer",
         quadcopter_interfaces(),
-        initialize_sim,
         quadcopter_simulation,
         Dict("main_view" => animate_quadcopter);
     )

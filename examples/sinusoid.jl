@@ -1,5 +1,7 @@
 # --- Example Usage ---
 # The following code demonstrates how to use the module with a simple sine wave simulation.
+include("../src/ControlDashboard.jl")
+
 using ControlDashboard
 using ControlDashboard.ControlPanel
 using DataFrames
@@ -8,18 +10,15 @@ using PlotlyJS
 
 # PlotlyBase.default_layout_template[] = "plotly_dark"
 
-function initial_state((a, f, p, dt))
-    return Dict(
+function run_sin_simulation((a, f, p, dt))
+    @info "Running simulation"
+    Dict(
         "amplitude" => a,
         "frequency" => f,
         "phase" => p,
         "duration" => 10,
         "dt" => dt,
     )
-end
-
-function run_sin_simulation(state)
-    @info "Running simulation"
     t = 0:state["dt"]:state["duration"]
     values = state["amplitude"] .* sin.(state["frequency"] .* t .+ state["phase"])
     return DataFrame(; time = collect(t), value = values)
@@ -103,16 +102,10 @@ function main()
             "align-items" => "stretch",             # Make children stretch full height
             "padding" => "16px",
         ),
-        row_style = Dict(
-            "display" => "flex",       # Stack label + slider vertically
-            "flex-direction" => "column",
-            "align-items" => "stretch", # Stretch children to fill column
-        ),
     )
     app = initialize_dashboard("Sinusoid Tuner"; control_panel = panel)
     set_callbacks!(
         app,
-        initial_state,
         run_sin_simulation,
         Dict("main_view" => make_timeseries_figure),
         [

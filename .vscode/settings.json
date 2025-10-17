@@ -3,10 +3,14 @@
     "editor.defaultFormatter": "julialang.language-julia",
     "editor.formatOnSave": true
   },
-  "juliaformatter.configPath": ".JuliaFormatter.toml",
   "julia.lint.run": true,
   "julia.lint.call": true,
   "julia.lint.missingrefs": "all",
   "julia.lint.iter": true,
-  "julia.lint.constif": true
+  "julia.lint.constif": true,
+  "julia.lint.disabledDirs": [
+    "docs",
+    "test",
+    "examples"
+  ],
 }

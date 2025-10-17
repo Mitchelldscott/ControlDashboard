@@ -56,13 +56,13 @@ Simulate a system of ordinary differential equations (ODEs) over a given time ho
 function rk4_simulation(
     system_dynamics,
     initial_state;
-    t_final::Number = 5.0,
+    t_final::Number = 5,
     dt::Number = 0.01,
     params = nothing,
     state_names::AbstractVector = String[],
 )
     # Use SVector for initial state for performance optimization recommended in Julia ODE/Robotics ecosystems [6]
-    tspan = (0.0, t_final)
+    tspan = (zero(typeof(t_final)), t_final)
     # Define the ODE problem
     prob = ODEProblem(system_dynamics, initial_state, tspan)
     # Solve the ODE. Using Tsit5(), a powerful explicit Runge-Kutta method often effective 

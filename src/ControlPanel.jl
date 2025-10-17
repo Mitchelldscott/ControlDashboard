@@ -181,7 +181,7 @@ function build_component_ui(val::Val{:datatable}, config::Dict, compid::Abstract
         id = compid,
         columns = get(config, "columns", []),
         data = get(config, "data", val),
-        editable = get(config, "editable", false),
+        editable = get(config, "editable", true),
         filter_action = get(config, "filter_action", "none"),
         sort_action = get(config, "sort_action", "none"),
         sort_mode = get(config, "sort_mode", "single"),
@@ -216,15 +216,12 @@ Keywords:
 """
 function make_panel(
     configs::Vector{<:Dict};
-    shape = (1, length(configs)),
     component_style = Dict(),
     label_style = Dict(),
     panel_style = Dict(),
-    row_style = Dict(),
 )
-    nrows, ncols = shape
     # Initialize a 2D array of empty divs
-    contents = fill(html_div(), nrows * ncols)
+    contents = []
 
     for config in configs
         # Skip configs without an id
@@ -232,28 +229,11 @@ function make_panel(
             @warn "Skipping component configuration because it lacks an 'id':" config
             continue
         end
-
-        # If no position is specified find the first emtpy index (searches left->right, top->bottom)
-        pos =
-            haskey(config, "position") ?
-            (config["position"][1] - 1) * ncols + config["position"][2] :
-            findfirst(x -> isnothing(x.children), contents)
-        if pos === nothing
-            @warn "Control Panel out of space, too many components for the given shape"
-            break
-        end
         # Build the specified component
-        contents[pos] = build_component(config, component_style, label_style)
+        push!(contents, build_component(config, component_style, label_style))
     end
-    rows = [
-        html_div(
-            [contents[(i - 1) * ncols + j] for j in 1:ncols];
-            style = row_style,
-        )
-        for i in 1:nrows
-    ]
     return html_div(
-        rows;
+        contents;
         id = "ControlPanel",
         style = panel_style,
     )
@@ -291,33 +271,93 @@ end
 
 # --- Method for Vectors ---
 function set_component_config!(config::Dict, val::AbstractVector)
+    if all(x -> x isa AbstractVector, val)
+        if !isempty(val)
+            ncols = length(first(val))
+            variable_name = first(String(config["id"]))
+            colnames = ["$(variable_name)_$(i)" for i in 1:ncols]
+            col_vectors = [collect(col) for col in zip(val...)]
+            dict_val = Dict(name => col for (name, col) in zip(colnames, col_vectors))
+            set_component_config!(config, dict_val)
+        end
+    else
+        variable_name = first(String(config["id"]))
+        colname = "$(variable_name)_1"
+        dict_val = Dict(colname => val)
+        set_component_config!(config, dict_val)
+    end
+end
+
+function set_component_config!(config::Dict, val::AbstractDict)
     config["component"] = "datatable"
+    config["variable"] = first(String(config["id"]))
 
-    # Define the columns: a single editable column for the vector elements
-    config["columns"] = [
-        Dict(
-            "name" => "Value",
-            "id" => "Value",
-            "deletable" => true,
-            "selectable" => true,
-            "editable" => true, # CRITICAL: Allows user to edit data
-        ),
-    ]
+    # Determine if the dict’s values are vectors (i.e., multiple rows)
+    if all(x -> x isa AbstractVector, values(val))
+        # Ensure all value vectors have equal length
+        lengths = unique(length.(values(val)))
+        if length(lengths) != 1
+            error(
+                "All value vectors in the dict must have the same length to form a table.",
+            )
+        end
 
-    # Format the data: Convert the vector into a Vector of Dicts (list of rows)
-    # Each original vector element becomes a row under the "Value" column.
-    config["data"] = [Dict("Value" => o) for o in val]
+        nrows = first(lengths)
+        keys_list = collect(keys(val))
 
-    # Set up standard DataTable features
-    config["editable"] = true # Enable overall table editing
-    config["filter_action"] = "native"
-    config["sort_action"] = "native"
-    config["row_deletable"] = true
-    config["page_action"] = "native"
-    config["page_current"] = 0
-    config["page_size"] = 10
-    config["column_selectable"] = "multi"
-    config["row_selectable"] = "multi"
+        # Create columns from dict keys
+        config["columns"] = [
+            Dict(
+                "name" => string(k),
+                "id" => string(k),
+                "deletable" => false,
+                "editable" => true,
+                "column_selectable" => "false",
+                "type" => "numeric",
+                "validation" => Dict("allow_null" => false),
+                "format" => Dict(
+                    "specifier" => ".4f", # Display as floating point with 4 decimal places
+                    "nully" => "0.0000", # Display an empty string if the value is null
+                    "locale" => Dict(
+                        "locale" => "en-US" # Use US formatting (dot for decimal)
+                    ),
+                ),
+            ) for k in keys_list
+        ]
+
+        # Build rows: each row[i] collects ith element of each vector value
+        config["data"] = [
+            Dict(string(k) => val[k][i] for k in keys_list) for i in 1:nrows
+        ]
+    else
+        # Single-row dict (scalar values)
+        keys_list = collect(keys(val))
+
+        config["columns"] = [
+            Dict(
+                "name" => string(k),
+                "id" => string(k),
+                "deletable" => false,
+                "editable" => true,
+                "validation" => Dict("allow_null" => false),
+                "column_selectable" => "false",
+                "type" => "numeric",
+                "format" => Dict(
+                    "specifier" => ".4f", # Display as floating point with 4 decimal places
+                    "nully" => "0.0000", # Display an empty string if the value is null
+                    "locale" => Dict(
+                        "locale" => "en-US" # Use US formatting (dot for decimal)
+                    ),
+                ),
+            ) for k in keys_list
+        ]
+
+        # Single-row data entry
+        config["data"] = [Dict(string(k) => val[k] for k in keys_list)]
+    end
+    # Enable interactive table features
+    config["editable"] = true
+    config["row_deletable"] = false
 end
 
 # --- Method for Enums ---
@@ -355,35 +395,20 @@ component (a `dcc_input` box) for each field.
 """
 function make_control_panel(
     params_struct::T;
-    shape = nothing,
     component_style = Dict(),
+    label_style = Dict(),
     panel_style = Dict(),
 ) where {T}
     configs = Vector{Dict}()
     names = fieldnames(T)
-    num_fields = length(names)
 
-    # Default to a single column layout if no shape is provided
-    final_shape = (shape === nothing) ? (1, num_fields) : shape
-    nrows, ncols = final_shape
-
-    # Check if the requested shape can hold all fields
-    if num_fields > nrows * ncols
-        @error "Shape ($nrows, $ncols) is too small for $num_fields fields."
-    end
-
-    for (i, name) in enumerate(names)
+    for name in names
         val = getfield(params_struct, name)
 
-        # Assign grid position based on row-major order
-        row_pos = div(i - 1, ncols) + 1
-        col_pos = mod(i - 1, ncols) + 1
-
         # Create the configuration dictionary for the component
-        config = Dict(
+        config = Dict{String, Any}(
             "id" => String(name),
             "label" => titlecase(String(name)),
-            "position" => (row_pos, col_pos),
         )
         infer_field_type!(config, val)
         push!(configs, config)
@@ -392,9 +417,9 @@ function make_control_panel(
     # Use the provided `make_panel` function to build the final layout
     return make_panel(
         configs;
-        shape = final_shape,
         component_style = component_style,
         panel_style = panel_style,
+        label_style = label_style,
     )
 end
 

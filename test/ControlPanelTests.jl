@@ -22,14 +22,14 @@ using ControlDashboard
         ]
         out = make_panel(comps)
         @test out isa Component
-        @test length(out.children[1].children) == 3
+        @test length(out.children) == 3
 
         # Test Input
-        @test out.children[1].children[1].children[2].id == "roll"
+        @test out.children[1].children[2].id == "roll"
         # Test Slider
-        @test out.children[1].children[2].children[2].id == "pitch"
+        @test out.children[2].children[2].id == "pitch"
         # Test Dropdown
-        dropdown_component = out.children[1].children[3].children[2]
+        dropdown_component = out.children[3].children[2]
         @test dropdown_component.id == "mode"
         @test dropdown_component.value == "stabilize"
         @test length(dropdown_component.options) == 3
@@ -43,13 +43,11 @@ using ControlDashboard
                 "component" => "input",
                 "label" => "Roll",
                 "id" => "roll",
-                "position" => (1, 1),
             ),
             Dict(
                 "component" => "input",
                 "label" => "Pitch",
                 "id" => "pitch",
-                "position" => (1, 2),
             ),
             Dict(
                 "component" => "slider",
@@ -58,7 +56,6 @@ using ControlDashboard
                 "min" => -180,
                 "max" => 180,
                 "step" => 5,
-                "position" => (2, 1),
             ),
             Dict(
                 "component" => "dropdown",
@@ -69,39 +66,27 @@ using ControlDashboard
                     Dict("label" => "Manual", "value" => "manual"),
                 ],
                 "value" => "auto",
-                "position" => (2, 2),
             ),
         ]
         # a single container component
-        grid = make_panel(comps; shape = (2, 2))
+        grid = make_panel(comps)
 
         # The result 'grid' is an Array containing two sub Arrays.
         @test grid isa Component
         @test grid.id == "ControlPanel"
-        @test length(grid.children) == 2
-
-        # Extract the rows from the array.
-        row1 = grid.children[1]
-        @test row1 isa Component
-
-        row2 = grid.children[2]
-        @test row2 isa Component
+        @test length(grid.children) == 4
 
         # Now, test the children of the container.
-        @test length(row1.children) == 2
-        @test length(row2.children) == 2
-
-        # Verifiy components in each row
-        roll_input_container = row1.children[1]
+        roll_input_container = grid.children[1]
         @test roll_input_container isa Component
 
-        pitch_input_container = row1.children[2]
+        pitch_input_container = grid.children[2]
         @test pitch_input_container isa Component
 
-        yaw_slider_container = row2.children[1]
+        yaw_slider_container = grid.children[3]
         @test yaw_slider_container isa Component
 
-        throttle_dropdown_container = row2.children[2]
+        throttle_dropdown_container = grid.children[4]
         @test throttle_dropdown_container isa Component
 
         # Test component IDs
@@ -137,44 +122,42 @@ using ControlDashboard
         panel = make_control_panel(params)
 
         @test panel.id == "ControlPanel"
-        @test length(panel.children) == 1
-        @test length(panel.children[1].children) == 4
+        @test length(panel.children) == 4
 
-        component_1 = panel.children[1].children[1].children[2]
+        component_1 = panel.children[1].children[2]
         @test component_1.id == "a"
         @test component_1.type == "number"
 
-        component_2 = panel.children[1].children[2].children[2]
+        component_2 = panel.children[2].children[2]
         @test component_2.id == "b"
 
-        component_3 = panel.children[1].children[3].children[2]
+        component_3 = panel.children[3].children[2]
         @test component_3.id == "c"
         @test component_3.type == "text"
 
-        component_4 = panel.children[1].children[4].children[2]
+        component_4 = panel.children[4].children[2]
         @test component_4.id == "d"
         @test component_4.data ==
-              [Dict("Value" => 1), Dict("Value" => 2), Dict("Value" => 3)]
+              [Dict("d_1" => 1), Dict("d_1" => 2), Dict("d_1" => 3)]
 
         # Test custom shape
-        panel2 = make_control_panel(params; shape = (2, 2))
-        @test length(panel2.children) == 2
-        @test length(panel2.children[1].children) == 2
-        @test panel2.children[1].children[1].children[2].id == "a"
-        @test panel2.children[1].children[2].children[2].id == "b"
-        @test panel2.children[2].children[1].children[2].id == "c"
-        @test panel2.children[2].children[2].children[2].id == "d"
+        panel2 = make_control_panel(params)
+        @test length(panel2.children) == 4
+        @test panel2.children[1].children[2].id == "a"
+        @test panel2.children[2].children[2].id == "b"
+        @test panel2.children[3].children[2].id == "c"
+        @test panel2.children[4].children[2].id == "d"
 
         # Test fewer fields than shape
         small = SmallStruct(10, false)
-        panel3 = make_control_panel(small; shape = (2, 1))
+        panel3 = make_control_panel(small)
         @test length(panel3.children) == 2
-        @test panel3.children[1].children[1].children[2].id == "x"
-        @test panel3.children[2].children[1].children[2].id == "y"
+        @test panel3.children[1].children[2].id == "x"
+        @test panel3.children[2].children[2].id == "y"
 
         # Test empty shape defaults
         panel4 = make_control_panel(small)
-        @test length(panel4.children[1].children) == 2
+        @test length(panel4.children) == 2
     end
 end
 
@@ -198,22 +181,19 @@ end
                     "component" => "input",
                     "label" => "A",
                     "id" => "id-a",
-                    "position" => (1, 1),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "B",
                     "id" => "id-b",
-                    "position" => (1, 2),
                 ),
                 Dict(
                     "component" => "datatable",
                     "label" => "C",
                     "id" => "id-c",
-                    "position" => (2, 1),
                 ),
             ]
-            panel = make_panel(config; shape = (2, 2))
+            panel = make_panel(config)
             expected_ids = [("id-a", "value"), ("id-b", "value"), ("id-c", "data")]
             results = get_interactive_components(panel)
             @test results == expected_ids
@@ -249,113 +229,95 @@ end
                     "component" => "input",
                     "label" => "Duration",
                     "id" => "t_final",
-                    "position" => (1, 1),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Sample time",
                     "id" => "dt",
-                    "position" => (2, 1),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "Roll",
                     "id" => "roll",
-                    "position" => (1, 2),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "Pitch",
                     "id" => "pitch",
-                    "position" => (1, 3),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "Yaw",
                     "id" => "yaw",
-                    "position" => (1, 4),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "P",
                     "id" => "p",
-                    "position" => (2, 2),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "Q",
                     "id" => "q",
-                    "position" => (2, 3),
                 ),
                 Dict(
                     "component" => "slider",
                     "label" => "R",
                     "id" => "r",
-                    "position" => (2, 4),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Kp",
                     "id" => "Kp",
-                    "position" => (3, 1),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Ki",
                     "id" => "Ki",
-                    "position" => (3, 2),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Kd",
                     "id" => "Kd",
-                    "position" => (3, 3),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Arm length",
                     "id" => "L",
-                    "position" => (3, 4),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Ixx",
                     "id" => "Ixx",
-                    "position" => (1, 5),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Iyy",
                     "id" => "Iyy",
-                    "position" => (2, 5),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Izz",
                     "id" => "Izz",
-                    "position" => (3, 5),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Mass",
                     "id" => "m",
-                    "position" => (1, 6),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Thrust Coeff",
                     "id" => "Kf",
-                    "position" => (2, 6),
                 ),
                 Dict(
                     "component" => "input",
                     "label" => "Drag Coeff",
                     "id" => "Km",
-                    "position" => (3, 6),
                 ),
             ]
             expected = [(c["id"], "value") for c in quadcopter_config]
-            panel = make_panel(quadcopter_config; shape = (3, 6))
+            panel = make_panel(quadcopter_config)
             results = get_interactive_components(panel)
 
             # The function should find all 18 unique IDs
