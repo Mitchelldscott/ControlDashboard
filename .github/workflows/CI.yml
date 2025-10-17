@@ -5,7 +5,7 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-
+  
 permissions:
   actions: write
   contents: read
@@ -33,31 +33,42 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Check for changed Julia files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          files: |
+            src/**/*.jl
+            test/**/*.jl
       - name: Cache dependencies
+        if: ${{ steps.changed-files.outputs.any_changed }} == 'true'
         uses: julia-actions/cache@v1
         with:
           cache-name: julia_${{ matrix.version }}_cache
       - name: Run Tests
+        if: ${{ steps.changed-files.outputs.any_changed }} == 'true'
         working-directory: ${{ github.workspace }}
         shell: bash
         run: | 
           echo "Running tests for Julia ${{ matrix.version }} ..."
-          julia --project=. -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'test/CodeCoverage.jl'
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-${{ matrix.version }}
+          path: lcov.info
 
-  code-coverage:
-    needs: setup
+  upload-codecov:
+    needs: test
     runs-on: ubuntu-latest
+    if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
         with:
-          cache-name: julia_1.11_cache
-      - name: Build coverage artifacts
-        working-directory: ${{ github.workspace }}
-        run: |
-          julia --project=. test/CodeCoverage.jl
+          name: lcov-1.11
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -65,7 +76,7 @@ jobs:
           files: "lcov.info"
 
   documentation:
-    needs: setup
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

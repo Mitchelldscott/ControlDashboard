@@ -9,19 +9,11 @@ runs:
   using: "composite"
   steps:
     - name: Checkout repository
-          uses: actions/checkout@v4
+      uses: actions/checkout@v4
     - name: Set up Julia ${{ inputs.julia-version }}
       uses: julia-actions/setup-julia@v2
       with:
         version: ${{ inputs.julia-version }}
-
-    - name: Check for changed Julia files
-      id: changed-files
-      uses: tj-actions/changed-files@v47
-      with:
-        files: |
-          src/**/*.jl
-          test/**/*.jl
 
     - name: Cache dependencies
       uses: julia-actions/cache@v1
