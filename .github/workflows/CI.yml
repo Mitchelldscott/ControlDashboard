@@ -18,11 +18,7 @@ jobs:
       matrix:
         version: ['1.10', '1.11', '1.12.0-rc3']
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Reusable Julia Environment Setup
-        # Calls the composite action located in .github/actions/julia-project-setup/
-        # This single step replaces Setup Julia, Cache, and Install Dependencies.
+      - name: Julia Environment Setup
         uses: ./.github/actions/julia-project-setup
         with:
           julia-version: ${{ matrix.version }}
@@ -40,12 +36,12 @@ jobs:
       - name: Cache dependencies
         uses: julia-actions/cache@v1
         with:
-          cache-name: julia_1.11_cache
+          cache-name: julia_${{ matrix.version }}_cache
       - name: Run Tests
         working-directory: ${{ github.workspace }}
         shell: bash
         run: | 
-          echo "Running tests for Julia 1.11 ..."
+          echo "Running tests for Julia ${{ matrix.version }} ..."
           julia --project=. -e 'using Pkg; Pkg.test()'
 
   code-coverage:
@@ -65,8 +61,8 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: "lcov.info"
-          fail_ci_if_error: false
 
   documentation:
     needs: setup
