@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         version: ['1.10', '1.11', '1.12.0-rc3']
     steps:
       - name: Checkout repository
@@ -33,10 +34,17 @@ jobs:
         with:
           version: ${{ matrix.version }}
 
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
         with:
-          cache-name: julia_cache
+          path: |
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/packages
+            ~/.julia/environments/v${{ matrix.version }}
+          key: julia-cache-${{ matrix.os }}-${{ matrix.version }}-${{ hashFiles('Project.toml', 'Manifest.toml') }}
+          restore-keys: |
+            julia-cache-${{ matrix.os }}-${{ matrix.version }}-
 
       - name: Install dependencies
         shell: bash
@@ -61,14 +69,25 @@ jobs:
   documentation:
     needs: test-with-coverage
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        version: ['1.10', '1.11', '1.12.0-rc3']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
         with:
-          cache-name: julia_cache
+          path: |
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/packages
+            ~/.julia/environments/v${{ matrix.version }}
+          key: julia-cache-${{ matrix.os }}-${{ matrix.version }}-${{ hashFiles('Project.toml', 'Manifest.toml') }}
+          restore-keys: |
+            julia-cache-${{ matrix.os }}-${{ matrix.version }}-
 
       - name: Build and deploy documentation
         working-directory: ${{ github.workspace }}

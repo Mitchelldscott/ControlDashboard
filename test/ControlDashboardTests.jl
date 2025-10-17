@@ -1,3 +1,4 @@
+include("../src/ControlDashboard.jl")
 using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
 
 @testset "ControlDashboard tests" begin
@@ -38,7 +39,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         interfaces = [("duration_slider", "value"), ("dt_slider", "value")]
 
         # Execute the function to be tested
-        set_callbacks!(dash(), mock_run_simulation, figures, interfaces)
+        ControlDashboard.set_callbacks!(dash(), mock_run_simulation, figures, interfaces)
 
         # --- 3. Assertions ---
         test_slider_values = (100, 0.5)
@@ -63,7 +64,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         figures = Dict("figure_A" => mock_renderer, "figure_B" => mock_renderer)
         interfaces = [("sliderA", "value"), ("sliderB", "value")]
 
-        set_callbacks!(app, mock_run_simulation, figures, interfaces)
+        ControlDashboard.set_callbacks!(app, mock_run_simulation, figures, interfaces)
 
         # Two callbacks should have been created
         @test length(app.callbacks) == 2
@@ -76,7 +77,7 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
         figures = Dict() # Empty dictionary
         interfaces = [("slider", "value")]
 
-        set_callbacks!(app, mock_run_simulation, figures, interfaces)
+        ControlDashboard.set_callbacks!(app, mock_run_simulation, figures, interfaces)
 
         # No callbacks should be registered if there are no figures
         @test isempty(app.callbacks)

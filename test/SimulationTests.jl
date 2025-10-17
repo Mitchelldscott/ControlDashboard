@@ -1,3 +1,5 @@
+include("../src/Simulation.jl")
+include("../src/ControlDashboard.jl")
 using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
 
 @testset "Simulation tests" begin
