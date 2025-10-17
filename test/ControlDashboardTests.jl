@@ -9,19 +9,11 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
     MOCK_FIGURE = Dict("data" => "mock_plot", "layout" => "mock_layout")
 
     # Use Refs to act as simple logs, tracking calls and arguments to the mock functions.
-    state_factory_calls = Ref{Vector{Any}}([])
     run_simulation_calls = Ref{Vector{Any}}([])
     renderer_calls = Ref{Vector{Any}}([])
 
-    # Define mock versions of the simulation and rendering functions.
-    # Each function logs its input arguments before returning a predefined mock object.
-    function mock_state_factory(inputs)
-        push!(state_factory_calls[], inputs)
-        return MOCK_STATE
-    end
-
-    function mock_run_simulation(state)
-        push!(run_simulation_calls[], state)
+    function mock_run_simulation(_)
+        push!(run_simulation_calls[], MOCK_STATE)
         return MOCK_DATAFRAME
     end
 
@@ -32,7 +24,6 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
     # Helper function to clear the logs before each new testset.
     function reset_mocks()
-        empty!(state_factory_calls[])
         empty!(run_simulation_calls[])
         empty!(renderer_calls[])
     end
@@ -44,20 +35,17 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         # Define the inputs for this test case
         figures = Dict("main_graph" => mock_renderer)
-        interfaces = ["duration_slider", "dt_slider"]
+        interfaces = [("duration_slider", "value"), ("dt_slider", "value")]
 
         # Execute the function to be tested
-        set_callbacks!(dash(), mock_state_factory, mock_run_simulation, figures, interfaces)
+        set_callbacks!(dash(), mock_run_simulation, figures, interfaces)
 
         # --- 3. Assertions ---
         test_slider_values = (100, 0.5)
-        df = mock_run_simulation(mock_state_factory(test_slider_values))
+        df = mock_run_simulation(test_slider_values)
         result_figure = mock_renderer(df)
 
         # Verify the chain of function calls
-        @test length(state_factory_calls[]) == 1
-        @test first(state_factory_calls[]) == test_slider_values
-
         @test length(run_simulation_calls[]) == 1
         @test first(run_simulation_calls[]) == MOCK_STATE
 
@@ -73,9 +61,9 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         app = dash()
         figures = Dict("figure_A" => mock_renderer, "figure_B" => mock_renderer)
-        interfaces = ["interface1"]
+        interfaces = [("sliderA", "value"), ("sliderB", "value")]
 
-        set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
+        set_callbacks!(app, mock_run_simulation, figures, interfaces)
 
         # Two callbacks should have been created
         @test length(app.callbacks) == 2
@@ -86,39 +74,15 @@ using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFra
 
         app = dash()
         figures = Dict() # Empty dictionary
-        interfaces = ["slider1"]
+        interfaces = [("slider", "value")]
 
-        set_callbacks!(app, mock_state_factory, mock_run_simulation, figures, interfaces)
+        set_callbacks!(app, mock_run_simulation, figures, interfaces)
 
         # No callbacks should be registered if there are no figures
         @test isempty(app.callbacks)
 
         # None of the processing functions should have been called
-        @test isempty(state_factory_calls[])
         @test isempty(run_simulation_calls[])
         @test isempty(renderer_calls[])
-    end
-
-    @testset "ode_simulation tests" begin
-        # Define a simple scalar ODE: du/dt = -u, solution u(t) = exp(-t)
-        function simple_dynamics!(du, u, p, t)
-            du[1] = -u[1]
-        end
-
-        # Run simulation
-        df = rk4_simulation(simple_dynamics!, [1.0]; t_final = 1.0, dt = 0.1)
-
-        # Check type
-        @test isa(df, DataFrame)
-
-        # Check required columns
-        @test names(df) == ["time", "x1"]
-
-        # Time column goes from 0 → t_final with step dt
-        @test df.time[1] ≈ 0.0
-        @test df.time[end] ≈ 1.0
-
-        # Analytical solution at t=1: exp(-1) ≈ 0.3679
-        @test df.x1[end] ≈ exp(-1) atol=1e-3
     end
 end

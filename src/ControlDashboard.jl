@@ -5,127 +5,172 @@ module ControlDashboard
 # Import required libraries
 using Dash, DataFrames, StaticArrays, DifferentialEquations
 
+# Sub-modules
 include("ControlPanel.jl")
+using .ControlPanel:
+    make_panel,
+    make_control_panel,
+    get_interactive_components,
+    sample_time_and_duration_sliders
 
-# Export the main dashboard function so it can be used by other modules.
-export initialize_dashboard, set_callbacks!, sol_to_dataframe, rk4_simulation
+include("Simulation.jl")
+using .Simulation: sol_to_dataframe, rk4_simulation
+
+export initialize_dashboard,
+    set_callbacks!,
+    run_dashboard,
+    make_panel,
+    make_control_panel,
+    get_interactive_components,
+    sample_time_and_duration_sliders,
+    sol_to_dataframe,
+    rk4_simulation
 
 """
-    initialize_dashboard(title; interfaces=make_interfaces(), graphs=make_graphs()) -> DashApp
+    initialize_dashboard(title; title_style, control_panel, views, external_stylesheets)
 
-Factory function that initializes a Dash app with the provided styles, interfaces and graphs.
+Create and initialize a Dash application layout with a title, control panel, and visualization views.
+
+# Arguments
+
+  - `title`: Page title displayed at the top of the dashboard.
+  - `title_style`: CSS style dictionary for the title (default centers text).
+  - `control_panel`: Vector of Dash components defining the interactive control panel.
+  - `views`: Vector of Dash visualization components (e.g., graphs, tables).
+  - `external_stylesheets`: URLs of external CSS stylesheets applied to the dashboard.
+
+# Returns
+
+  - A configured `Dash` app instance with the specified layout.
 """
 function initialize_dashboard(
-    title;
-    title_style = Dict("textAlign" => "center"),
-    interfaces = sample_time_and_duration_sliders(),
-    graphs = [dcc_graph(id = "main_view")],
-    external_stylesheets = ["https://bootswatch.com/5/darkly/bootstrap.min.css"],
+    title::AbstractString;
+    title_style::Dict = Dict("textAlign" => "center"),
+    control_panel::Component = sample_time_and_duration_sliders(),
+    views::Component = html_div(dcc_graph(; id = "main_view")),
+    external_stylesheets::AbstractVector = [
+        "https://bootswatch.com/5/darkly/bootstrap.min.css",
+    ],
 )
-    app = dash(external_stylesheets = external_stylesheets)
+    app = dash(; external_stylesheets = external_stylesheets)
 
-    set_callbacks!(app, state_factory, run_simulation, figures, interfaces)
-
-    app.layout = html_div() do
-        html_h1(title, style = title_style),
-        interfaces,  # Control Panel
-        graphs...    # vizualizations
-    end
+    app.layout = html_div([
+        html_h1(title; style = title_style),
+        control_panel,                  # Control Panel
+        views,                          # vizualizations
+    ])
 
     return app
 end
 
 """
-    control_dashboard(state_factory, run_simulation, make_figure)
+    set_callbacks!(app, state_factory, run_simulation, figures, interfaces)
 
-Register callbacks for interactive components of a generic Dash app.
-
-This function uses a set of input functions to initialize and run a 
-simulation, 
+Register reactive Dash callbacks linking UI components to visualization updates.
 
 # Arguments
-- `state_factory::Function`: A function that takes no arguments and returns a fresh 
-initial state object (e.g., a Dict or a custom struct with initial conditions).
-- `run_simulation::Function`: A function that executes the simulation. It should accept
-the initial state as input and return a dataframe.
-- `make_figure::Function`: A function that takes the simulation data and returns a
-figure to display.
+
+  - `app`: The Dash application instance where callbacks will be registered.
+  - `state_factory`: Function that constructs a simulation or model state from user interface inputs.
+  - `run_simulation`: Function that runs the simulation or computation given the constructed state.
+  - `figures`: Dictionary mapping figure IDs to renderer functions that convert simulation results (e.g., `DataFrame`) into plotly figures.
+  - `interfaces`: Vector of `(id, field)` pairs identifying interactive components and the fields to observe (e.g., `("slider_1", "value")`).
+
+# Behavior
+
+For each figure defined in `figures`, a Dash callback is created.
+Whenever any input in `interfaces` changes, the callback:
+
+ 1. Builds the state via `state_factory(interfaces)`.
+ 2. Executes `run_simulation` on that state.
+ 3. Updates the corresponding figure using its renderer.
+
+If `figures` or `interfaces` are empty, no callbacks are registered.
 """
-function set_callbacks!(app, state_factory, run_simulation, figures, interfaces)
+function set_callbacks!(
+    app,
+    run_simulation::Function,
+    figures::AbstractDict,
+    interfaces::AbstractVector,
+)
     # Define the callback function that links the sliders to the graph.
     # When a slider value changes, this function is triggered.
+    if length(interfaces) === 0
+        return
+    end
     for (figure_name, renderer) in figures
         callback!(
             app,
             Output(figure_name, "figure"),
-            [Input(interface, "value") for interface in interfaces],
-        ) do interfaces...
-            df = run_simulation(state_factory(interfaces))
+            [Input(name, field) for (name, field) in interfaces],
+        ) do control_input...
+            df = run_simulation(control_input)
             return renderer(df)
         end
     end
 end
 
 """
-    sol_to_dataframe(sol; state_names)
+    run_dashboard(title, control_panel, initialize_sim, simulate, renderers;
+                  host = "127.0.0.1", port = 8050,
+                  views = [dcc_graph(id = "main_view")],
+                  external_stylesheets = ["https://bootswatch.com/5/darkly/bootstrap.min.css"])
 
-Construct a DataFrame from the solution of a DifferentialEquations.ODEProblem.
-
-This is a helper function for simulations that use DifferentialEquations.jl.
-
-# Arguments 
-- `sol::` : The output of `DifferentialEquations.solve()`.
-- `cols::Vector{String}` : Column names of the DataFrame.
-
-# Returns
-- `df::DataFrame` : States and sample times extracted from a sol.
-"""
-function sol_to_dataframe(sol; cols = nothing)
-    arr = Array(sol)  # each column is a state, rows = time steps
-    df = DataFrame(time = sol.t) # sol should always have t
-    # Auto-generate names if not provided
-    if isnothing(cols)
-        cols = ["x$(i)" for i = 1:size(arr, 1)]
-    end
-    for (i, name) in enumerate(cols)
-        df[!, Symbol(name)] = arr[i, :]  # grab the i-th state trajectory
-    end
-    return df
-end
-
-"""
-    rk4_simulation(system_dynamics, initial_state; t_final=5.0, dt=0.01, p=nothing)
-
-Simulate a system of ordinary differential equations (ODEs) over a given time horizon.
+Launch an interactive Dash-based simulation dashboard that connects UI controls to visualization updates.
 
 # Arguments
-- `system_dynamics`: A function `f!(du, u, p, t)` defining the system dynamics in-place.
-- `initial_state`: Vector-like object or function that prepares simulation data from a tuple of interfaces.
-- `t_final`: (default = 10.0) Final simulation time.
-- `dt`: (default = 0.01) Time step for saving results.
-- `p`: (default = nothing) Optional parameters to pass to the dynamics.
 
-# Returns
-- `DataFrame` containing simulation results with columns:
-    - `time` = simulation time points  
-    - state columns extracted from the solution (`x1, x2, ...` by default, or renamed if using `sol_to_dataframe` with labels).
+  - `title`: Title displayed at the top of the dashboard.
+  - `control_panel`: Vector of Dash components defining the interactive control panel.
+  - `initialize_sim`: Function that constructs an initial simulation state from UI inputs.
+  - `simulate`: Function that runs the simulation or computation given a constructed state.
+  - `renderers`: Dictionary mapping figure IDs to rendering functions that convert simulation outputs (e.g., data tables or DataFrames) into Plotly figures.
+
+# Keyword Arguments
+
+  - `host`: Host address for the dashboard server (default `"127.0.0.1"`).
+  - `port`: Port number for the dashboard server (default `8050`).
+  - `views`: Vector of Dash visualization components to display (default a single graph view).
+  - `external_stylesheets`: URLs of external CSS stylesheets applied to the dashboard theme.
+
+# Behavior
+
+ 1. Initializes the Dash app layout using `initialize_dashboard`.
+ 2. Registers interactive callbacks that connect control panel inputs to simulation and visualization updates.
+ 3. Starts the local web server and serves the dashboard.
 """
-function rk4_simulation(
-    system_dynamics,
-    initial_state;
-    t_final = 5.0,
-    dt = 0.01,
-    params = nothing,
-    state_names = nothing,
+function run_dashboard(
+    title::AbstractString,
+    control_panel::Component,
+    simulation::Function,
+    renderers::AbstractDict;
+    host::AbstractString = "127.0.0.1",
+    port::Integer = 8050,
+    views::Component = html_div(dcc_graph(; id = "main_view")),
+    external_stylesheets::AbstractVector = [
+        "https://bootswatch.com/5/darkly/bootstrap.min.css",
+    ],
 )
-    # Use SVector for initial state for performance optimization recommended in Julia ODE/Robotics ecosystems [6]
-    tspan = (0.0, t_final)
-    # Define the ODE problem
-    prob = ODEProblem(system_dynamics, initial_state, tspan)
-    # Solve the ODE. Using Tsit5(), a powerful explicit Runge-Kutta method often effective 
-    # for non-stiff dynamics like this attitude model [12, 16].
-    sol = solve(prob, Tsit5(), saveat = dt, p = params)
-    # Process results into DataFrame
-    return sol_to_dataframe(sol; cols = state_names)
+
+    # Step 1: Initialize dashboard app with user-specified interfaces
+    app = initialize_dashboard(
+        title;
+        control_panel = control_panel,
+        views = views,
+        external_stylesheets = external_stylesheets,
+    )
+
+    # Step 2: Register simulation and renderer callbacks
+    set_callbacks!(
+        app,
+        simulation,
+        renderers,
+        get_interactive_components(control_panel),
+    )
+
+    # Step 3: Run the dashboard server
+    run_server(app, host, port)
+
+    return nothing
 end
-end # module ControlDashboards
+end # module ControlDashboard

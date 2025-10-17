@@ -1,0 +1,88 @@
+name: ControlDashboard CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  setup:
+    name: Julia ${{ matrix.version }} setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['1.10', '1.11', '1.12.0-rc3']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Reusable Julia Environment Setup
+        # Calls the composite action located in .github/actions/julia-project-setup/
+        # This single step replaces Setup Julia, Cache, and Install Dependencies.
+        uses: ./.github/actions/julia-project-setup
+        with:
+          julia-version: ${{ matrix.version }}
+   
+  test:
+    needs: setup
+    name: Julia ${{ matrix.version }} Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['1.10', '1.11', '1.12.0-rc3']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Run Tests
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: | 
+          echo "Running tests for Julia 1.11 ..."
+          julia --project=. -e 'using Pkg; Pkg.test()'
+
+  code-coverage:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Build coverage artifacts
+        working-directory: ${{ github.workspace }}
+        run: |
+          julia --project=. test/CodeCoverage.jl
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: "lcov.info"
+          fail_ci_if_error: false
+
+  documentation:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: julia-actions/cache@v1
+        with:
+          cache-name: julia_1.11_cache
+      - name: Build and deploy documentation
+        working-directory: ${{ github.workspace }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JULIA_DEBUG: Documenter 
+        run: |
+          julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate();'
+          julia --project=docs docs/make.jl

@@ -1,40 +1,38 @@
 using Dash,
     DataFrames,
     PlotlyJS,
-    LinearAlgebra,
-    DifferentialEquations,
-    ControlDashboard,
-    ControlDashboard.ControlPanel
-using StaticArrays # Added for performance, standard practice in Julia rigid body dynamics [6, 7]
+    StaticArrays,
+    DifferentialEquations
 
-# # Constants defined in the user's snippet
-# const I = Diagonal([0.01, 0.01, 0.02])  # kg·m²
-# const invI = inv(I)
+using ControlDashboard
+using ControlDashboard.ControlPanel
 
-# # --- More Accurate Dynamics Constants (Derived from sources for typical quadrotor models) ---
-# # We define these constants globally for use in the simulation setup.
-# const J_ROTOR = 3.357e-5 # kg m^2 (Rotor inertia, Jr) [8]
-# const AR_DRAG = 0.0001 # Placeholder for aerodynamic resistance (Ar) [3]
-
-
-struct QuadcopterParams
-    I_diag::SVector{3,Float64}   # Diagonal inertia [kg·m^2]
+struct QuadcopterSimParameters
+    t_final::Float64             # Length of the simulation [s]
+    dt::Float64                  # Sampling time of the simulation [s]
+    rpy::SVector{3, Float64}      # Initial Attitude [degree]
+    pqr::SVector{3, Float64}      # Initial Angular Rates [rad/s]
+    I_diag::SVector{3, Float64}   # Diagonal inertia [kg·m^2]
     J_r::Float64                 # Rotor inertia [kg·m^2]
     Ar::Float64                  # Aerodynamic drag coefficient
     kp::Float64                  # Proportional gains
     ki::Float64                  # Integral gains
     kd::Float64                  # Derivative gains
-    integrator::SVector{3,Float64} # Integral error state
+    integrator::SVector{3, Float64} # Integral error state
     m::Float64                   # Mass [kg]
     g::Float64                   # Gravity [m/s^2]
     L::Float64                   # Arm length [m]
     kf::Float64                  # Thrust coefficient
     km::Float64                  # Drag torque coefficient
-    P_body::SVector{4,SVector{3,Float64}}  # Motor positions in body frame
-    spin_dirs::SVector{4,Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
+    motor_positions::SVector{4, SVector{3, Float64}}  # Motor positions in body frame
+    spin_dirs::SVector{4, Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
 
-    function QuadcopterParams(;
-        I_diag = SVector(1e-3, 1e-3, 2e-3),
+    function QuadcopterSimParameters(;
+        t_final = 10.0,
+        dt = 0.1,
+        rpy = SVector(0.0, 0.0, 0.0),
+        pqr = SVector(0.0, 0.0, 0.0),
+        I_diag = SVector(1e-3, 1e-3, 1e-2),
         J_r = 6e-5,
         Ar = 1e-6,
         kp = 0.05,
@@ -46,17 +44,38 @@ struct QuadcopterParams
         L = 0.1,
         kf = 1e-5,
         km = 2e-6,
+        motor_positions = SVector(
+            SVector(L / √2, L / √2, 0.0),   # M1: +x, +y
+            SVector(L / √2, -L / √2, 0.0),   # M2: +x, -y
+            SVector(-L / √2, -L / √2, 0.0),   # M3: -x, -y
+            SVector(-L / √2, L / √2, 0.0),    # M4: -x, +y
+        ),
         spin_dirs = SVector(1, -1, 1, -1),
     )
-        P_body = @SVector [
-            SVector(L/√2, L/√2, 0.0),   # M1: +x, +y
-            SVector(L/√2, -L/√2, 0.0),   # M2: +x, -y
-            SVector(-L/√2, -L/√2, 0.0),   # M3: -x, -y
-            SVector(-L/√2, L/√2, 0.0),    # M4: -x, +y
-        ]
-        new(I_diag, J_r, Ar, kp, ki, kd, integrator, m, g, L, kf, km, P_body, spin_dirs)
+        return new(
+            t_final,
+            dt,
+            rpy,
+            pqr,
+            I_diag,
+            J_r,
+            Ar,
+            kp,
+            ki,
+            kd,
+            integrator,
+            m,
+            g,
+            L,
+            kf,
+            km,
+            motor_positions,
+            spin_dirs,
+        )
     end
 end
+
+const SIM_SETTINGS = Ref{QuadcopterSimParameters}(QuadcopterSimParameters())
 
 """
     control_torque!(state, integral_error, kp, ki, kd) -> SVector{3,Float64}
@@ -65,48 +84,43 @@ Compute body-frame control torques `[τx, τy, τz]` for a quadcopter using a PI
 with proportional (`kp`), integral (`ki`), and derivative (`kd`) gains.
 
 # Arguments
-- `state` :: `SVector{6,Float64}`
+
+  - `state` :: `SVector{6,Float64}`
     The quadcopter attitude state vector:
-    `["roll", "pitch", "yaw", "p", "q", "r"]`
-    where `(roll, pitch, yaw)` are Euler angles [rad], and `(p, q, r)` are angular rates [rad/s].
-- `integral_error` :: `SVector{3,Float64}`
+    `["φ", "θ", "yaw", "p", "q", "r"]`
+    where `(φ, θ, yaw)` are Euler angles [rad], and `(p, q, r)` are angular rates [rad/s].
+  - `integral_error` :: `SVector{3,Float64}`
     Accumulated integral of attitude errors `[∫roll_err, ∫pitch_err, ∫yaw_err]`.
-- `kp`, `ki`, `kd` :: `SVector{3,Float64}` or scalar
+  - `kp`, `ki`, `kd` :: `SVector{3,Float64}` or scalar
     PID gains. Can be axis-specific vectors or scalars applied uniformly.
 
 # Returns
-- `SVector{3,Float64}`
+
+  - `SVector{3,Float64}`
     Control torques `[τx, τy, τz]` in the body frame.
 
 # Notes
-- The reference attitude is assumed to be **zero**, so the error is simply
-  the negative of the current Euler angles.
-- Derivative error is computed from the body angular rates `[-p, -q, -r]`.
-- The integral error is **updated in place** inside the function; if persistence
-  across timesteps is required, the updated integral state must be stored externally.
+
+  - The reference attitude is assumed to be **zero**, so the error is simply
+    the negative of the current Euler angles, this function assumes only the
+    roll and pitch measurements are available.
+  - Derivative error is computed from the body angular rates `[-p, -q, -r]`.
+  - The integral error is **updated in place** inside the function; if persistence
+    across timesteps is required, the updated integral state must be stored externally.
 
 # Role in Feedback Control Pipeline
+
 (measured attitude) → [roll, pitch, yaw, p, q, r] → PID(state - reference) →
 motor mixing → rotor thrusts → body torques [τx, τy, τz]
 
-This function forms the **attitude controller** in the quadcopter feedback loop,
+This function forms the **attitude controller** in the quadcopter feedback loop,    # state = ["roll", "pitch", "yaw", "p", "q", "r"]
 stabilizing the vehicle around the desired orientation.
 """
 function control_torque!(state, integral_error, kp, ki, kd)
-    # state = ["roll", "pitch", "yaw", "p", "q", "r"]
-    roll, pitch, yaw, p, q, r = state
-
-    # Reference is zero, so error is just -state angles
-    # Also pretends that there is no yaw sensor (usually there isn't)
-    err = @SVector [-roll, -pitch, 0]
-
-    # Derivative error = -angular rates (p,q,r)
+    φ, θ, _, p, q, r = state
+    err = @SVector [-φ, -θ, 0]
     derr = @SVector [-p, -q, -r]
-
-    # Update integral error
     integral_error = integral_error .+ err
-
-    # PID control law
     return kp .* err + ki .* integral_error + kd .* derr
 end
 
@@ -117,36 +131,38 @@ Compute the squared motor speeds required to achieve a desired total thrust and 
 for an arbitrary quadrotor geometry.
 
 # Arguments
-- `thrust::Float64`: Desired total thrust (N) produced by all rotors combined.
-- `τ_control::SVector{3,Float64}`: Desired body torques `(τx, τy, τz)` in N·m.
-- `params`: Parameter struct containing:
-    - `P_body::Vector{SVector{3,Float64}}`: Rotor position vectors in body frame (m).
-    - `kf::Float64`: Thrust coefficient (N·s²/rad²).
-    - `km::Float64`: Moment (drag) coefficient (N·m·s²/rad²).
-    - `spin_dirs::NTuple{4,Float64}`: Spin direction of each rotor (+1 for CCW, −1 for CW).
+
+  - `thrust::Float64`: Desired total thrust (N) produced by all rotors combined.
+
+  - `τ_control::SVector{3,Float64}`: Desired body torques `(τx, τy, τz)` in N·m.
+  - `params`: Parameter struct containing:
+
+      + `motor_positions::Vector{SVector{3,Float64}}`: Rotor position vectors in body frame (m).
+      + `kf::Float64`: Thrust coefficient (N·s²/rad²).
+      + `km::Float64`: Moment (drag) coefficient (N·m·s²/rad²).
+      + `spin_dirs::NTuple{4,Float64}`: Spin direction of each rotor (+1 for CCW, −1 for CW).
 
 # Returns
-- `SVector{4,Float64}`: The squared angular velocities `(ω₁², ω₂², ω₃², ω₄²)` of the motors
-  required to generate the commanded thrust and torques. Negative values are clamped to zero.
+
+  - `SVector{4,Float64}`: The squared angular velocities `(ω₁², ω₂², ω₃², ω₄²)` of the motors
+    required to generate the commanded thrust and torques. Negative values are clamped to zero.
 """
 function motor_mixing(thrust, τ_control, params)
     τx, τy, τz = τ_control
-    P = params.P_body
+    P = params.motor_positions
     kf, km = params.kf, params.km
     spin_dirs = params.spin_dirs
 
-    # Build mixing matrix dynamically
-    mixing = zeros(4, 4)
-    for i = 1:4
-        τ_i = cross(P[i], SVector(0, 0, kf))
-        mixing[1, i] = kf
-        mixing[2, i] = τ_i[1]
-        mixing[3, i] = τ_i[2]
-        mixing[4, i] = spin_dirs[i] * km
-    end
+    τ = cross.(P, Ref(SVector(0.0, 0.0, kf)))   # τ_i = cross(P[i], [0,0,kf])
+    mixing = @SMatrix [
+        kf kf kf kf;
+        τ[1][1] τ[2][1] τ[3][1] τ[4][1];
+        τ[1][2] τ[2][2] τ[3][2] τ[4][2];
+        spin_dirs[1]*km spin_dirs[2]*km spin_dirs[3]*km spin_dirs[4]*km
+    ]
 
     # Solve for squared speeds
-    ω_sq = mixing \ SVector(thrust, τx, τy, τz)
+    ω_sq = pinv(mixing) * SVector{4}(thrust, τx, τy, τz)
     return map(x -> max(0.0, x), ω_sq)
 end
 
@@ -161,46 +177,44 @@ which is the inverse of the `motor_mixing` function. It's used within the
 dynamics simulation to determine how the motor outputs affect the vehicle's state.
 
 # Arguments
-- `w_sq` :: `NTuple{4, Float64}`
+
+  - `w_sq` :: `NTuple{4, Float64}`
     A tuple of the squared angular velocities `(w1^2, w2^2, w3^2, w4^2)`.
-- `params` :: `QuadcopterParams`
+  - `params` :: `QuadcopterSimParameters`
     A struct containing the quadcopter's physical parameters (`L`, `kf`, `km`).
 
 # Returns
-- `SVector{3,Float64}`
+
+  - `SVector{3,Float64}`
     The resultant aerodynamic torques `[τx, τy, τz]` in the body frame.
 """
 function aerodynamics(w, params)
     kf, km = params.kf, params.km
-    P_body = params.P_body
+    motor_positions = params.motor_positions
     spin_dirs = params.spin_dirs
 
-    τ = SVector{3,Float64}(0.0, 0.0, 0.0)
     F_z = 0.0 # no gravity
-
-    for i = 1:4
-        ω² = w[i]^2
-        Ti = kf * ω²
-        Mi = km * ω² * spin_dirs[i]
-
-        # Accumulate total thrust
-        F_z += Ti
-        τ += cross(P_body[i], SVector(0.0, 0.0, Ti)) + SVector(0.0, 0.0, Mi)
-    end
+    w2 = w .^ 2  # element-wise square
+    T = kf .* w2                     # thrust per motor
+    M = km .* w2 .* spin_dirs        # moment per motor
+    F_z = sum(T)                      # scalar
+    τ = sum(cross.(motor_positions, @. SVector(0.0, 0.0, T)) .+ SVector.(0.0, 0.0, M))
 
     return F_z, τ
 end
 
 """
     attitude_dynamics!(du, u, p, t)
+
 Rigid-body rotational dynamics for a quadcopter.
-- u = [φ, θ, ψ, p, q, r] → roll, pitch, yaw and angular rates (Euler angles and Body Rates)
-- du = derivative
-- p = NamedTuple{(:torques, :I_diag, :J_r, :Ar, :Omega_r)} containing control moments and physical parameters.
+
+  - u = [φ, θ, ψ, p, q, r] → roll, pitch, yaw and angular rates (Euler angles and Body Rates)
+  - du = derivative
+  - p = NamedTuple{(:torques, :I_diag, :J_r, :Ar, :Omega_r)} containing control moments and physical parameters.
 """
 function attitude_dynamics!(du, u, params, t)
     # State extraction
-    φ, θ, _ψ, p, q, r = u
+    φ, θ, _, p, q, r = u
 
     # Parameters extraction
     I_x, I_y, I_z = params.I_diag
@@ -210,11 +224,11 @@ function attitude_dynamics!(du, u, params, t)
     integrator = params.integrator
     spin_dirs = params.spin_dirs
 
-    # Delay controls (simulate startup)
+    # Delay controls (simulate startup time)
     if t > 2.0
         τ_control = control_torque!(u, integrator, kp, ki, kd)
         ωs = motor_mixing(0.0, τ_control, params) # add throttle for altitude ctrl
-        F, (τx, τy, τz) = aerodynamics(ωs, params)
+        _, (τx, τy, τz) = aerodynamics(ωs, params)
     else
         ωs = (0.0, 0.0, 0.0, 0.0)
         (τx, τy, τz) = (0.0, 0.0, 0.0)
@@ -240,7 +254,7 @@ function attitude_dynamics!(du, u, params, t)
     # --- 2. Attitude dynamics (Newton-Euler) ---
     # Gyroscopic term: compute net rotor spin (signed)
     # sign convention: spin_dirs indicates +1 for CCW rotors (positive spin)
-    Ω_net = sum(spin_dirs[i] * ωs[i] for i = 1:4)   # net rotor angular velocity (rad/s)
+    Ω_net = sum(spin_dirs[i] * ωs[i] for i in 1:4)   # net rotor angular velocity (rad/s)
 
     # rate damping terms (Ar is linear damping of angular rates)
     du[4] = (I_y - I_z) / I_x * q * r - (J_r / I_x) * q * Ω_net + τx / I_x - A_r / I_x * p
@@ -254,37 +268,43 @@ end
 Compute the positions of the four quadcopter motors in 3D space, rotated according
 to the quadcopter's roll (φ), pitch (θ), and yaw (ψ) angles. Positions are relative to the
 center of mass (COM). Assumes '+' configuration.
+
 # Arguments
-- `φ` : roll angle in radians
-- `θ` : pitch angle in radians
-- `ψ` : yaw angle in radians
-- `wing_length` : distance from COM to each motor (l)
+
+  - `φ` : roll angle in radians
+  - `θ` : pitch angle in radians
+  - `ψ` : yaw angle in radians
+  - `wing_length` : distance from COM to each motor (l)
+
 # Returns
-- `Vector{Vector{Float64}}`: List of 4 motor positions `[x, y, z]` in the inertial frame after rotation.
+
+    # Rotation matrix R_IB (body → inertial) using ZYX (yaw-pitch-roll)
+
+  - `Vector{Vector{Float64}}`: List of 4 motor positions `[x, y, z]` in the inertial frame after rotation.
 """
-function relative_motor_positions(φ, θ, ψ, P_body)
+function relative_motor_positions(φ, θ, ψ, motor_positions)
     # Rotation matrix R_IB (body → inertial) using ZYX (yaw-pitch-roll)
     cψ, sψ = cos(ψ), sin(ψ)
     cθ, sθ = cos(θ), sin(θ)
     cφ, sφ = cos(φ), sin(φ)
 
     R_IB = @SMatrix [
-        cθ*cψ sφ*sθ*cψ - cφ*sψ cφ*sθ*cψ + sφ*sψ;
-        cθ*sψ sφ*sθ*sψ + cφ*cψ cφ*sθ*sψ - sφ*cψ;
+        cθ*cψ sφ * sθ * cψ-cφ * sψ cφ * sθ * cψ+sφ * sψ;
+        cθ*sψ sφ * sθ * sψ+cφ * cψ cφ * sθ * sψ-sφ * cψ;
         -sθ sφ*cθ cφ*cθ
     ]
 
     # Rotate body-frame motor positions into inertial frame
-    P_inertial = [R_IB * P for P in P_body]
+    P_inertial = [R_IB * P for P in motor_positions]
     # Return as a Vector of Float64 vectors
     return reduce(hcat, [collect(P) for P in P_inertial])
 end
 
 """
-    animate_quadcopter(df::DataFrame; params=QuadcopterParams(), template="plotly_dark", frame_duration=50)
+    animate_quadcopter(df::DataFrame; params=QuadcopterSimParameters(), template="plotly_dark", frame_duration=50)
 
 Build a PlotlyJS animation from a DataFrame `df` that must have columns:
-  :time, :roll, :pitch, :yaw
+:time, :roll, :pitch, :yaw
 
 Each row produces a single frame; motor positions are computed by
 `relative_motor_positions(roll, pitch, yaw, params)`. COM is at origin.
@@ -293,36 +313,35 @@ Returns a PlotlyJS.Plot ready to be used as the `figure` for `dcc_graph`.
 """
 function animate_quadcopter(
     df;
-    params = QuadcopterParams(),
+    params = SIM_SETTINGS[],
     template = "plotly_dark",
     frame_duration = 50,
 )
-    @assert all(name -> hasproperty(df, name), (:roll, :pitch, :yaw)) "DataFrame must contain :roll, :pitch, :yaw"
     wing_length = params.L
     quad_color = "black"
     prop_color = ["orange"; fill("red", 3)...]
-    layout = Layout(
+    layout = Layout(;
         template = template,
         showlegend = false,
-        scene = attr(
+        scene = attr(;
             aspectmode = "manual",   # don't auto-stretch
-            aspectratio = attr(x = 1, y = 1, z = 1),  # equal scaling
-            xaxis = attr(range = [-3*wing_length, 3*wing_length]),
-            yaxis = attr(range = [-3*wing_length, 3*wing_length]),
-            zaxis = attr(range = [-3*wing_length, 3*wing_length]),
+            aspectratio = attr(; x = 1, y = 1, z = 1),  # equal scaling
+            xaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
+            yaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
+            zaxis = attr(; range = [-3 * wing_length, 3 * wing_length]),
         ),
         updatemenus = [
-            attr(
+            attr(;
                 type = "buttons",
                 showactive = false,
                 buttons = [
-                    attr(
+                    attr(;
                         label = "Play",
                         method = "animate",
                         args = [
                             nothing,
-                            attr(
-                                frame = attr(duration = frame_duration, redraw = true),
+                            attr(;
+                                frame = attr(; duration = frame_duration, redraw = true),
                                 fromcurrent = true,
                             ),
                         ],
@@ -335,53 +354,53 @@ function animate_quadcopter(
     frames = PlotlyFrame[]
 
     # loop over timesteps in df
-    for i = 1:nrow(df)
+    for i in 1:nrow(df)
         roll = df.roll[i]
         pitch = df.pitch[i]
         yaw = df.yaw[i]
 
         # calculate motor positions from Euler angles
-        motors = relative_motor_positions(roll, pitch, yaw, params.P_body)
+        motors = relative_motor_positions(roll, pitch, yaw, params.motor_positions)
         push!(
             frames,
-            frame(
+            frame(;
                 data = [
-                    scatter3d(
+                    scatter3d(;
                         x = motors[1, :],
                         y = motors[2, :],
                         z = motors[3, :],
                         mode = "markers",
-                        marker = attr(size = 5),
-                        line = attr(width = 2, color = prop_color),
+                        marker = attr(; size = 5),
+                        line = attr(; width = 2, color = prop_color),
                         template = template,
                     ),
-                    scatter3d(
+                    scatter3d(;
                         x = [motors[1, 1], motors[1, 3]],
                         y = [motors[2, 1], motors[2, 3]],
                         z = [motors[3, 1], motors[3, 3]],
                         mode = "lines",
-                        line = attr(width = 3, color = quad_color),
+                        line = attr(; width = 3, color = quad_color),
                         template = template,
                     ),
-                    scatter3d(
+                    scatter3d(;
                         x = [motors[1, 2], motors[1, 4]],
                         y = [motors[2, 2], motors[2, 4]],
                         z = [motors[3, 2], motors[3, 4]],
                         mode = "lines",
-                        line = attr(width = 3, color = quad_color),
+                        line = attr(; width = 3, color = quad_color),
                         template = template,
                     ),
                 ],
-                layout = attr(
+                layout = attr(;
                     annotations = [
-                        attr(
+                        attr(;
                             text = "Frame $i",
                             x = 0,
                             y = 1,  # top-left corner
                             xref = "paper",
                             yref = "paper",  # relative to entire figure
                             showarrow = false,
-                            font = attr(size = 16, color = "black"),
+                            font = attr(; size = 16, color = "black"),
                         ),
                     ],
                 ),
@@ -399,494 +418,140 @@ end
 
 # returns a Vector of components (same shape as your original quadcopter_interfaces)
 function quadcopter_interfaces()
-    return make_panel(
-        [
-            Dict(
-                "component"=>"input",
-                "label"=>"Duration",
-                "id"=>"t_final",
-                "value"=>10.0,
-                "position"=>(1, 1),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Sample time",
-                "id"=>"dt",
-                "value"=>0.2,
-                "position"=>(2, 1),
-            ),
-
-            # Initial attitude (slightly tilted to make motion interesting)
-            Dict(
-                "component"=>"input",
-                "label"=>"Roll",
-                "id"=>"roll",
-                "value"=>5.0,
-                "position"=>(1, 2),
-            ),      # degrees
-            Dict(
-                "component"=>"input",
-                "label"=>"Pitch",
-                "id"=>"pitch",
-                "value"=>-15.0,
-                "position"=>(1, 3),
-            ),  # degrees
-            Dict(
-                "component"=>"input",
-                "label"=>"Yaw",
-                "id"=>"yaw",
-                "value"=>45.0,
-                "position"=>(1, 4),
-            ),      # degrees
-
-            # Initial angular rates (small rotation to start)
-            Dict(
-                "component"=>"input",
-                "label"=>"P",
-                "id"=>"p",
-                "value"=>0.2,
-                "position"=>(2, 2),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Q",
-                "id"=>"q",
-                "value"=>-0.25,
-                "position"=>(2, 3),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"R",
-                "id"=>"r",
-                "value"=>1.0,
-                "position"=>(2, 4),
-            ),
-
-            # PID controller (moderate tuning for demo stability)
-            Dict(
-                "component"=>"input",
-                "label"=>"Kp",
-                "id"=>"Kp",
-                "value"=>0.1,
-                "position"=>(3, 1),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Ki",
-                "id"=>"Ki",
-                "value"=>0.0,
-                "position"=>(3, 2),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Kd",
-                "id"=>"Kd",
-                "value"=>0.05,
-                "position"=>(3, 3),
-            ),
-
-            # Geometry and inertial properties
-            Dict(
-                "component"=>"input",
-                "label"=>"Arm length",
-                "id"=>"L",
-                "value"=>0.22,
-                "position"=>(3, 4),
-            ), # meters
-            Dict(
-                "component"=>"input",
-                "label"=>"Ixx",
-                "id"=>"Ixx",
-                "value"=>6.8e-3,
-                "position"=>(1, 5),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Iyy",
-                "id"=>"Iyy",
-                "value"=>9.2e-3,
-                "position"=>(2, 5),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Izz",
-                "id"=>"Izz",
-                "value"=>1.35e-2,
-                "position"=>(3, 5),
-            ),
-
-            # Physical parameters
-            Dict(
-                "component"=>"input",
-                "label"=>"Mass",
-                "id"=>"m",
-                "value"=>0.48,
-                "position"=>(1, 6),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Thrust Coeff",
-                "id"=>"Kf",
-                "value"=>6e-5,
-                "position"=>(2, 6),
-            ),
-            Dict(
-                "component"=>"input",
-                "label"=>"Drag Coeff",
-                "id"=>"Km",
-                "value"=>1.5e-6,
-                "position"=>(3, 6),
-            ),
-        ];
-        shape = (3, 6),
-        panel_style = Dict("display" => "flex", "alignItems" => "center"),
+    return make_control_panel(
+        SIM_SETTINGS[];
+        component_style = Dict(
+            "width" => "100%",
+            "display" => "flex",
+            "flex-direction" => "column",
+            "align-items" => "stretch",
+            "justify-content" => "center",
+            "color" => "black",
+            "padding" => "6px",
+            "box-sizing" => "border-box",
+        ),
+        label_style = Dict(
+            "font-weight" => "bold",
+            "text-align" => "center",
+            "margin-bottom" => "6px",
+            "font-size" => "14px",
+            "color" => "black",
+            "display" => "block",
+        ),
+        panel_style = Dict(
+            "display" => "grid",
+            "grid-template-columns" => "repeat(6, 1fr)",  # 6 equal-width columns
+            "grid-template-rows" => "repeat(3, auto)",    # 3 rows auto-sized
+            "gap" => "16px",
+            "width" => "100%",
+            "height" => "auto",
+            "padding" => "24px",
+            "box-sizing" => "border-box",
+            "background-color" => "#f8f8f8",
+            "border-radius" => "12px",
+            "box-shadow" => "0 4px 12px rgba(0, 0, 0, 0.1)",
+            "justify-items" => "stretch",
+            "align-items" => "start",
+        ),
     )
 end
 
 """
-    initial_state(interfaces::Dict{String, Float64}) -> t_final, dt, x0, params, state_names
+    quadcopter_simulation(interfaces::Dict{String, Float64}) -> t_final, dt, x0, params, state_names
 
 Produce the initial state of the quadcopter based on interface slider values.
 Expected keys in `interfaces`: "roll", "pitch", "yaw",...
 """
-function initialize_sim((
-    t_final,
-    dt,
-    roll,
-    pitch,
-    yaw,
-    p,
-    q,
-    r,
-    kp,
-    ki,
-    kd,
-    L,
-    Ixx,
-    Iyy,
-    Izz,
-    m,
-    kf,
-    km,
-))
-    # Define the names of all the states to save into the df
-    # Extract initial states from input
-    state_names = ["roll", "pitch", "yaw", "p", "q", "r"]
-    x0 = [deg2rad(roll), deg2rad(pitch), deg2rad(yaw), p, q, r]
-    # Define parameters (p).
-    params = QuadcopterParams(;
-        kp = kp,
-        ki = ki,
-        kd = kd,
-        L = L,
-        m = m,
-        kf = kf,
-        km = km,
-        I_diag = SVector(Ixx, Iyy, Izz),
-    )
-    return t_final, dt, x0, params, state_names
-end
+function quadcopter_simulation(inputs::NTuple{18, Any})
+    names = fieldnames(QuadcopterSimParameters)
 
-function quadcopter_simulation((t_final, dt, x0, params, state_names))
+    # Convert to named tuple for clarity
+    kwargs = (; zip(names, inputs)...)
+
+    # For 1D vector table
+    function read_num_vector(table)
+        SVector{length(table)}([row[first(keys(row))] for row in table])
+    end
+
+    # For 2D table (matrix)
+    function read_num_matrix(table)
+        colnames = collect(keys(first(table)))
+        nrows = length(table)
+        ncols = length(colnames)
+        SVector{nrows}(
+            SVector{ncols}(row[name] for name in sort(colnames)) for
+            row in table
+        )
+    end
+
+    # Process each table into a simple SVector
+    rpy = read_num_vector(kwargs.rpy)
+    pqr = read_num_vector(kwargs.pqr)
+    I_diag = read_num_vector(kwargs.I_diag)
+    integrator = read_num_vector(kwargs.integrator)
+    spin_dirs = read_num_vector(kwargs.spin_dirs)
+
+    # Assuming motor_position contains vectors
+    motor_positions = read_num_matrix(kwargs.motor_positions)
+    # --- End Data Extraction ---
+
+    # Construct the parameters struct using the corrected variable names and extracted data
+    SIM_SETTINGS[] = QuadcopterSimParameters(;
+        t_final = kwargs.t_final,
+        dt = kwargs.dt,
+        rpy = rpy,
+        pqr = pqr,
+        I_diag = I_diag,
+        J_r = kwargs.J_r,
+        Ar = kwargs.Ar,
+        kp = kwargs.kp,
+        ki = kwargs.ki,
+        kd = kwargs.kd,
+        integrator = integrator,
+        m = kwargs.m,
+        g = kwargs.g,
+        L = kwargs.L,
+        kf = kwargs.kf,
+        km = kwargs.km,
+        motor_positions = motor_positions,
+        spin_dirs = spin_dirs,
+    )
+
+    # Initial state vector [phi, theta, psi, p, q, r]
+    # Note: The constructor expects degrees for rpy, so we use the extracted values directly.
+    # The deg2rad conversion is now done here for the initial state.
+    x0 = [
+        deg2rad(rpy[1]),
+        deg2rad(rpy[2]),
+        deg2rad(rpy[3]),
+        pqr[1],
+        pqr[2],
+        pqr[3],
+    ]
+
     @info "Running Simulation"
+
     # run sim with RK4
     rk4_simulation(
         attitude_dynamics!,
         x0;
-        t_final = t_final,
-        dt = dt,
-        params = params,
-        state_names = state_names,
+        t_final = kwargs.t_final,
+        dt = kwargs.dt,
+        params = SIM_SETTINGS[],
+        state_names = ["roll", "pitch", "yaw", "p", "q", "r"],
     )
 end
 
 # --- Main execution ---
 function main()
-    app = initialize_dashboard(
-        "Quadcopter Attitude Stabilizer";
-        interfaces = quadcopter_interfaces(),
+    run_dashboard(
+        "Quadcopter Attitude Stabilizer",
+        quadcopter_interfaces(),
+        quadcopter_simulation,
+        Dict("main_view" => animate_quadcopter);
     )
-    set_callbacks!(
-        app,
-        initialize_sim, # Convert Control panel to initial state and params
-        quadcopter_simulation, # Use RK4 to simulate
-        Dict("main_view" => animate_quadcopter), # Render vizuals
-        [
-            "t_final",
-            "dt",
-            "roll",
-            "pitch",
-            "yaw",
-            "p",
-            "q",
-            "r",
-            "Kp",
-            "Ki",
-            "Kd",
-            "L",
-            "Ixx",
-            "Iyy",
-            "Izz",
-            "m",
-            "Kf",
-            "Km",
-        ],
-    )
-    run_server(app, "127.0.0.1", 8050)
 end
 
-main()
-
-### References
-
-```bibtex
-@article{Rackauckas_Comparison_2018,
-    author = {Rackauckas, Christopher},
-    title = {A Comparison Between Differential Equation Solver Suites In MATLAB, R, Julia, Python, C, Mathematica, Maple, and Fortran},
-    journal = {The Winnower},
-    volume = {6},
-    number = {e153459.98975},
-    pages = {e153459.98975},
-    year = {2018},
-    doi = {10.15200/winn.153459.98975},
-    note = {Cited in source}
-}
-
-@misc{JuliaDiscourse_RigidBodyDynamics_2020,
-    author = {tkoolen and contributors},
-    title = {Adding external force RigidBodyDynamics mechansms - General Usage},
-    howpublished = {Julia Discourse},
-    month = aug,
-    year = {2020},
-    note = {Cited in source}
-}
-
-@techreport{Determining_Products_Inertia,
-    title = {Determining Products of Inertia for Small Scale UAVs},
-    author = {{Undergraduate Student} and {Aerospace Engineer} and {Chief Scientist}},
-    institution = {NASA Armstrong Flight Research Center},
-    note = {Cited in source; specific authors and date not explicitly provided in excerpt.}
-}
-
-@misc{SciML_DifferentialEquations_jl_Docs,
-    author = {{SciML}},
-    title = {DifferentialEquations.jl: Multi-language suite for high-performance solvers of differential equations},
-    howpublished = {Julia Packages Documentation},
-    year = {2016--},
-    note = {Ecosystem started in May 2016, cited in source}
-}
-
-@misc{JuliaDiscourse_DojoQuadcopter,
-    title = {Dojo - simulating a quadcopter},
-    howpublished = {Julia Discourse},
-    note = {Cited in source}
-}
-
-@article{Idrissi_DynamicModelling_2020,
-    author = {Idrissi, Moad and Annaz, Fawaz},
-    title = {Dynamic Modelling and Analysis of a Quadrotor Based on Selected Physical Parameters},
-    journal = {International Journal of Mechanical Engineering and Robotics Research},
-    volume = {9},
-    number = {6},
-    month = jun,
-    year = {2020},
-    note = {Cited in source}
-}
-
-@misc{Seifner_FoundationInference_2024,
-    author = {Seifner, Patrick and Cvejoski, Kostadin and Berghaus, David and Ojeda, C{\'e}sar and S{\'a}nchez, Rams{\'e}s J.},
-    title = {Foundation Inference Models for Stochastic Differential Equations: A Transformer-based Approach for Zero-shot Function Estimation},
-    archivePrefix = {arXiv},
-    eprint = {2410.20587}, % Placeholder based on context, actual ID may differ
-    year = {2024},
-    note = {Under review; cited in source}
-}
-
-@online{DiffEq_GettingStarted,
-    author = {{SciML} and {DifferentialEquations.jl contributors}},
-    title = {Getting Started with Differential Equations in Julia},
-    year = {2025},
-    url = {https://docs.sciml.ai/DifferentialEquations/stable/tutorials/getting_started/}, % URL inferred from context
-    note = {DifferentialEquations.jl documentation. Cited in source}
-}
-
-@online{SciML_GettingStarted_Overview,
-    author = {{SciML}},
-    title = {Overview of Julia's SciML: Quickly: What is Julia's SciML Ecosystem?},
-    year = {2025},
-    url = {https://docs.sciml.ai/SciML/stable/overview/}, % URL inferred from context
-    note = {SciML documentation. Cited in source}
-}
-
-@online{JuliaHub_AerialVehicles,
-    author = {{JuliaHub}},
-    title = {Home $\cdot$ AerialVehicles.jl},
-    url = {https://juliapackages.com/p/aerialvehicles},
-    note = {Cited in source}
-}
-
-@online{JuliaHub_Multibody,
-    author = {{JuliaHub} and {JuliaSim}},
-    title = {Home $\cdot$ Multibody.jl},
-    url = {https://juliapackages.com/p/multibody},
-    note = {Cited in source}
-}
-
-@misc{rigidbodydynamicsjl,
-    author = {Koolen, Twan and contributors},
-    title = {{RigidBodyDynamics.jl}},
-    year = {2016},
-    url = {https://github.com/JuliaRobotics/RigidBodyDynamics.jl},
-    note = {Explicitly cited format in source}
-}
-
-@misc{Suresh_HoveringControl,
-    author = {Suresh, Harikrishnan and Sulficar, Abid and Desai, Vijay},
-    title = {Hovering control of a quadcopter using linear and nonlinear techniques},
-    note = {Cited in source}
-}
-
-@mastersthesis{Implementation_Quadcopter_Thesis,
-    title = {Implementation and comparison of linearization-based and backstepping controllers for quadcopters},
-    school = {Universitat Polit\`ecnica de Catalunya (UPCommons)},
-    note = {Author name not explicitly provided in excerpt. Cited in source}
-}
-
-@inproceedings{Sells_JuliaBenchmark_FlightSim,
-    author = {Sells, Ray},
-    title = {Julia Programming Language Benchmark Using a Flight Simulation},
-    booktitle = {Proceedings of the IEEE Aerospace Conference (Implied)},
-    year = {TBD},
-    organization = {NASA-MSFC},
-    note = {Cited in source}
-}
-
-@techreport{Shen_Leok_LieGroupVI,
-    author = {Shen, Xuefeng and Leok, Melvin},
-    title = {LIE GROUP VARIATIONAL INTEGRATORS FOR RIGID BODY PROBLEMS USING QUATERNIONS},
-    institution = {UCSD Math},
-    note = {Cited in source}
-}
-
-@article{Liu_Modelling_PID_2024,
-    author = {Liu, Yijin},
-    title = {Modelling and simulation of quadcopter UAV based on PID control},
-    journal = {Applied and Computational Engineering},
-    volume = {75},
-    pages = {202-210},
-    month = jul,
-    year = {2024},
-    doi = {10.54254/2755-2721/75/20240539},
-    note = {Cited in source}
-}
-
-@phdthesis{Nishimura_OnlineTrajectory_2021,
-    author = {Nishimura, Haruki},
-    title = {ONLINE TRAJECTORY PLANNING ALGORITHMS FOR ROBOTIC SYSTEMS UNDER UNCERTAINTY IN INTERACTIVE ENVIRONMENTS},
-    school = {Stanford University},
-    month = aug,
-    year = {2021},
-    note = {Cited in source}
-}
-
-@techreport{Wolter_Quadcopter_Report_2015,
-    author = {Wolter, Moritz (Group 19)},
-    title = {Quadcopter exercise - Simulation Report},
-    institution = {Unspecified},
-    month = jan,
-    year = {2015},
-    note = {Cited in source}
-}
-
-@techreport{Quadrotor_Modeling_Control_Unspecified,
-    title = {Quadrotor Modeling and Control},
-    institution = {Space Imaging and Optical Systems Lab},
-    note = {Cited in source}
-}
-
-@online{RBD_QuickStartGuide,
-    author = {{JuliaRobotics}},
-    title = {Quick start guide $\cdot$ RigidBodyDynamics.jl},
-    url = {https://juliarobotics.github.io/RigidBodyDynamics.jl/stable/quickstart/}, % URL inferred from context
-    note = {RigidBodyDynamics.jl Documentation. Cited in source}
-}
-
-@misc{Review_PID_UAVs,
-    title = {Review of PID Controller Applications for UAVs},
-    note = {Cited in source}
-}
-
-@misc{JuliaDiscourse_StiffSolvers_2022,
-    author = {graeffd and baggepinnen and isaacsas},
-    title = {Solver for stiff differential equations},
-    howpublished = {Julia Programming Language Discourse},
-    month = may,
-    year = {2022},
-    note = {Cited in source}
-}
-
-@online{Ghosh_Solving_DE_Julia_2025,
-    author = {Ghosh, Ritobrata},
-    title = {Solving First Order Differential Equations with Julia},
-    month = {mar},
-    year = {2025},
-    url = {https://ritog.github.io/posts/1st-order-DE-julia/1st_order_DE_julia.html},
-    note = {Cited in source}
-}
-
-@online{AerialVehicles_Stabilizing,
-    author = {{AerialVehicles.jl contributors}},
-    title = {Stabilizing a falling quadrotor $\cdot$ AerialVehicles.jl},
-    month = sep,
-    year = {2023},
-    note = {Cited in source}
-}
-
-@online{RoboticsSE_EulerAngles,
-    title = {Treatment of euler angles in quadcopter control},
-    howpublished = {Robotics Stack Exchange},
-    note = {Cited in source}
-}
-
-@misc{Snyder_JuliaCon2020_DroneAutonomy,
-    author = {Snyder, Kerry},
-    title = {Rapid Commercialization of Drone Autonomy using Julia},
-    booktitle = {JuliaCon 2020},
-    howpublished = {Video presentation},
-    year = {2020},
-    note = {Cited in source}
-}
-
-@misc{Ferrolho_JuliaCon2023_LeggedRobots,
-    author = {Ferrolho, Henrique},
-    title = {Using Julia to Optimise Trajectories for Robots with Legs},
-    booktitle = {JuliaCon 2023},
-    howpublished = {Video presentation},
-    year = {2023},
-    note = {Cited in source}
-}
-
-@inproceedings{Ferrolho_InverseDynamics_2021,
-    author = {Ferrolho, Henrique and Ivan, Vladimir and Merkt, Wolfgang and Havoutis, Ioannis and Vijayakumar, Sethu},
-    title = {Inverse Dynamics vs. Forward Dynamics in Direct Transcription Formulations for Trajectory Optimization},
-    booktitle = {2021 IEEE International Conference on Robotics and Automation (ICRA)},
-    year = {2021},
-    eprint = {2010.05359},
-    archivePrefix = {arXiv},
-    note = {Cited in source}
-}
-
-@misc{Saroufim_RigidBodyDynamicsTutorial,
-    author = {Saroufim, msaroufim},
-    title = {RigidBodyDynamicsTutorial: A tutorial on Rigid Body Dynamics in Julia},
-    howpublished = {GitHub Repository/Notes},
-    note = {Cited in source}
-}
-
-@misc{Plotly_Dash_jl_GitHub,
-    author = {{plotly}},
-    title = {Dash.jl: Dash for Julia - A Julia interface to the Dash ecosystem},
-    howpublished = {GitHub Repository},
-    note = {Cited in source}
-}
-```
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

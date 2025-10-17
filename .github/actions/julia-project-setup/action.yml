@@ -1,0 +1,26 @@
+name: "Julia Project Setup"
+description: "Checks out the repo, sets up a specified Julia version, caches dependencies, and runs Pkg.instantiate()."
+inputs:
+  julia-version:
+    description: "The Julia version to set up (e.g., 1.11)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Julia ${{ inputs.julia-version }}
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ inputs.julia-version }}
+
+    - name: Cache dependencies
+      uses: julia-actions/cache@v1
+      with:
+        cache-name: julia_${{ inputs.julia-version }}_cache
+
+    - name: Install dependencies
+      shell: bash
+      run: | 
+        # This ensures you start with a clean environment for instantiation
+        rm -f Manifest.toml 
+        julia --project=. -e 'using Pkg; Pkg.instantiate();'
