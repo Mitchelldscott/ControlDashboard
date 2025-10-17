@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test-with-coverage:
-    name: Julia ${{ matrix.version }} setup
+    name: Julia ${{ matrix.version }} Test Suite
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -20,6 +20,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Check for changed Julia files
         id: changed-files
         uses: tj-actions/changed-files@v47
@@ -42,29 +43,15 @@ jobs:
         run: | 
           rm -f Manifest.toml 
           julia --project=. -e 'using Pkg; Pkg.instantiate();'
-   
-  # test:
-  #   needs: setup
-  #   name: Julia ${{ matrix.version }} Test Suite
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       version: ['1.10', '1.11', '1.12.0-rc3']
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-      - name: Cache dependencies
-        if: ${{ steps.changed-files.outputs.any_changed }} == 'true'
-        uses: julia-actions/cache@v1
-        with:
-          cache-name: julia_${{ matrix.version }}_cache
+
       - name: Run Tests
         if: ${{ steps.changed-files.outputs.any_changed }} == 'true'
         working-directory: ${{ github.workspace }}
         shell: bash
         run: | 
           echo "Running tests for Julia ${{ matrix.version }} ..."
-          julia --project=. -e 'test/CodeCoverage.jl'
+          julia --project=. test/CodeCoverage.jl
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -78,10 +65,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Download coverage artifacts
         uses: actions/download-artifact@v4
         with:
           name: lcov-1.11
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -94,10 +83,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Cache dependencies
         uses: julia-actions/cache@v1
         with:
           cache-name: julia_1.11_cache
+
       - name: Build and deploy documentation
         working-directory: ${{ github.workspace }}
         env:

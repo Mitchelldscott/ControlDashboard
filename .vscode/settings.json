@@ -11,6 +11,8 @@
   "julia.lint.disabledDirs": [
     "docs",
     "test",
-    "examples"
+    "examples",
+    "*.toml",
+    "*.git*"
   ],
 }
