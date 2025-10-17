@@ -13,18 +13,17 @@ using .ControlPanel:
     get_interactive_components,
     sample_time_and_duration_sliders
 
+export make_panel,
+    make_control_panel,
+    get_interactive_components,
+    sample_time_and_duration_sliders
+
 include("Simulation.jl")
 using .Simulation: sol_to_dataframe, rk4_simulation
 
-export initialize_dashboard,
-    set_callbacks!,
-    run_dashboard,
-    make_panel,
-    make_control_panel,
-    get_interactive_components,
-    sample_time_and_duration_sliders,
-    sol_to_dataframe,
-    rk4_simulation
+export sol_to_dataframe, rk4_simulation
+
+export initialize_dashboard, set_callbacks!, run_dashboard
 
 """
     initialize_dashboard(title; title_style, control_panel, views, external_stylesheets)
@@ -33,15 +32,15 @@ Create and initialize a Dash application layout with a title, control panel, and
 
 # Arguments
 
-  - `title`: Page title displayed at the top of the dashboard.
-  - `title_style`: CSS style dictionary for the title (default centers text).
-  - `control_panel`: Vector of Dash components defining the interactive control panel.
-  - `views`: Vector of Dash visualization components (e.g., graphs, tables).
-  - `external_stylesheets`: URLs of external CSS stylesheets applied to the dashboard.
+    - `title`: Page title displayed at the top of the dashboard.
+    - `title_style`: CSS style dictionary for the title (default centers text).
+    - `control_panel`: Vector of Dash components defining the interactive control panel.
+    - `views`: Vector of Dash visualization components (e.g., graphs, tables).
+    - `external_stylesheets`: URLs of external CSS stylesheets applied to the dashboard.
 
 # Returns
 
-  - A configured `Dash` app instance with the specified layout.
+    - A configured `Dash` app instance with the specified layout.
 """
 function initialize_dashboard(
     title::AbstractString;

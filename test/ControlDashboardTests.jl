@@ -1,5 +1,6 @@
+using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
+
 include("../src/ControlDashboard.jl")
-using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
 
 @testset "ControlDashboard tests" begin
 

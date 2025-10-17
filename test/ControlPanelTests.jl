@@ -1,9 +1,8 @@
-include("../src/ControlPanel.jl")
 include("../src/ControlDashboard.jl")
 
 using Test
 using Dash
-using ControlDashboard, ControlPanel
+using ControlDashboard, ControlDashboard.ControlPanel
 
 @testset "ControlPanel tests" begin
     # --- Test 1: input & slider with defaults ---

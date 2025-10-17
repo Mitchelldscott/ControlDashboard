@@ -1,4 +1,5 @@
-using Pkg, Coverage
+import Pkg;
+using Coverage;
 
 Pkg.instantiate();
 
