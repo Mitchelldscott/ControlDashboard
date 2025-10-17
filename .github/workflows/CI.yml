@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test-with-coverage:
-    name: Julia ${{ matrix.version }} Test Suite
+    name: Julia ${{ matrix.version }} ${{ matrix.os }} Test Suite
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -67,12 +67,13 @@ jobs:
           files: "lcov.info"
 
   documentation:
+    name: Documentation
     needs: test-with-coverage
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        version: ['1.10', '1.11', '1.12.0-rc3']
+        os: [ubuntu-latest]
+        version: ['1.11']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
