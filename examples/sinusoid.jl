@@ -1,25 +1,20 @@
 # --- Example Usage ---
 # The following code demonstrates how to use the module with a simple sine wave simulation.
-include("../src/ControlDashboard.jl")
-
-using ControlDashboard
-using ControlDashboard.ControlPanel
+using ControlDashboard, ControlDashboard.ControlPanel
 using DataFrames
 using Dash
 using PlotlyJS
 
-# PlotlyBase.default_layout_template[] = "plotly_dark"
-
 function run_sin_simulation((a, f, p, dt))
     @info "Running simulation"
-    Dict(
+    state = Dict(
         "amplitude" => a,
         "frequency" => f,
         "phase" => p,
         "duration" => 10,
         "dt" => dt,
     )
-    t = 0:state["dt"]:state["duration"]
+    t = 0:dt:10
     values = state["amplitude"] .* sin.(state["frequency"] .* t .+ state["phase"])
     return DataFrame(; time = collect(t), value = values)
 end
@@ -81,7 +76,6 @@ function main()
     # Create the app by passing our custom simulation functions to the dashboard wrapper
     panel = make_panel(
         sin_wave_interfaces;
-        shape = (2, 2),
         component_style = Dict(
             "width" => "100%",        # Slider fills the available column
             "margin" => "4px 0",      # Vertical spacing between label and slider

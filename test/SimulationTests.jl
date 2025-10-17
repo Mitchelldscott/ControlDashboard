@@ -1,8 +1,5 @@
 using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
-
-include("../src/Simulation.jl")
-
-using .Simulation
+using ControlDashboard.Simulation
 
 @testset "Simulation tests" begin
     @testset "ode_simulation tests" begin

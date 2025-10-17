@@ -2,7 +2,6 @@ using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
 using ControlDashboard
 
 @testset "ControlDashboard tests" begin
-
     # --- 1. Setup Mock Environment ---
     # Define mock data structures that will be returned by our mock functions.
     MOCK_STATE = Dict("status" => "state_created")

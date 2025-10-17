@@ -2,10 +2,10 @@ using Dash,
     DataFrames,
     PlotlyJS,
     StaticArrays,
+    LinearAlgebra,
     DifferentialEquations
-
 using ControlDashboard
-using ControlDashboard.ControlPanel
+using ControlDashboard.ControlPanel, ControlDashboard.Simulation
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]

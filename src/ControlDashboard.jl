@@ -13,15 +13,12 @@ using .ControlPanel:
     get_interactive_components,
     sample_time_and_duration_sliders
 
-export make_panel,
-    make_control_panel,
-    get_interactive_components,
-    sample_time_and_duration_sliders
+export ControlPanel
 
 include("Simulation.jl")
 using .Simulation: sol_to_dataframe, rk4_simulation
 
-export sol_to_dataframe, rk4_simulation
+export Simulation
 
 export initialize_dashboard, set_callbacks!, run_dashboard
 
