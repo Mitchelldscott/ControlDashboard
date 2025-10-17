@@ -1,5 +1,5 @@
 using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
-include("../src/ControlDashboard.jl")
+using ControlDashboard
 
 @testset "ControlDashboard tests" begin
 

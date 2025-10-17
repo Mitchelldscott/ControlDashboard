@@ -2,6 +2,8 @@ using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
 
 include("../src/Simulation.jl")
 
+using .Simulation
+
 @testset "Simulation tests" begin
     @testset "ode_simulation tests" begin
         # Define a simple scalar ODE: du/dt = -u, solution u(t) = exp(-t)
