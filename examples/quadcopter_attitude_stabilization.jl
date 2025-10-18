@@ -549,7 +549,7 @@ function quadcopter_simulation(inputs::NTuple{18, Any})
 end
 
 # --- Main execution ---
-function main()
+function run_example()
     run_dashboard(
         "Quadcopter Attitude Stabilizer",
         quadcopter_interfaces(),
@@ -559,5 +559,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    run_example()
 end
