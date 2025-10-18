@@ -3,8 +3,9 @@ using Dash,
     PlotlyJS,
     StaticArrays,
     DifferentialEquations
-using ControlDashboard
-using ControlDashboard.ControlPanel, ControlDashboard.Simulation
+using ControlDashboard,
+    ControlDashboard.ControlPanel,
+    ControlDashboard.Simulation
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]
