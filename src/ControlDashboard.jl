@@ -3,7 +3,7 @@
 module ControlDashboard
 
 # Import required libraries
-using Dash, DataFrames, StaticArrays, DifferentialEquations
+using Dash
 
 # Sub-modules
 include("ControlPanel.jl")
