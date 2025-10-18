@@ -1,29 +1,25 @@
 using Dash,
-    DataFrames,
     PlotlyJS,
-    StaticArrays,
-    DifferentialEquations
-
+    StaticArrays
 using ControlDashboard
-using ControlDashboard.ControlPanel
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]
     dt::Float64                  # Sampling time of the simulation [s]
-    rpy::SVector{3, Float64}      # Initial Attitude [degree]
-    pqr::SVector{3, Float64}      # Initial Angular Rates [rad/s]
-    I_diag::SVector{3, Float64}   # Diagonal inertia [kg·m^2]
     J_r::Float64                 # Rotor inertia [kg·m^2]
     Ar::Float64                  # Aerodynamic drag coefficient
     kp::Float64                  # Proportional gains
     ki::Float64                  # Integral gains
     kd::Float64                  # Derivative gains
-    integrator::SVector{3, Float64} # Integral error state
     m::Float64                   # Mass [kg]
     g::Float64                   # Gravity [m/s^2]
     L::Float64                   # Arm length [m]
     kf::Float64                  # Thrust coefficient
     km::Float64                  # Drag torque coefficient
+    rpy::SVector{3, Float64}      # Initial Attitude [degree]
+    pqr::SVector{3, Float64}      # Initial Angular Rates [rad/s]
+    I_diag::SVector{3, Float64}   # Diagonal inertia [kg·m^2]
+    integrator::SVector{3, Float64} # Integral error state
     motor_positions::SVector{4, SVector{3, Float64}}  # Motor positions in body frame
     spin_dirs::SVector{4, Int}           # spin directions: +1 for CCW, -1 for CW (used for yaw sign)
 
@@ -55,20 +51,20 @@ struct QuadcopterSimParameters
         return new(
             t_final,
             dt,
-            rpy,
-            pqr,
-            I_diag,
             J_r,
             Ar,
             kp,
             ki,
             kd,
-            integrator,
             m,
             g,
             L,
             kf,
             km,
+            rpy,
+            pqr,
+            I_diag,
+            integrator,
             motor_positions,
             spin_dirs,
         )
@@ -153,13 +149,14 @@ function motor_mixing(thrust, τ_control, params)
     kf, km = params.kf, params.km
     spin_dirs = params.spin_dirs
 
-    τ = cross.(P, Ref(SVector(0.0, 0.0, kf)))   # τ_i = cross(P[i], [0,0,kf])
-    mixing = @SMatrix [
-        kf kf kf kf;
-        τ[1][1] τ[2][1] τ[3][1] τ[4][1];
-        τ[1][2] τ[2][2] τ[3][2] τ[4][2];
-        spin_dirs[1]*km spin_dirs[2]*km spin_dirs[3]*km spin_dirs[4]*km
-    ]
+    # cross(P, [0,0,kf]) == (y*kf, -x*kf, km*si)
+    τ =
+        mixing = @SMatrix[
+            hcat([
+                @SVector[kf, Pi[2]*kf, -Pi[1]*kf, km * si] for
+                (Pi, si) in zip(P, spin_dirs)
+            ])...,
+        ]
 
     # Solve for squared speeds
     ω_sq = pinv(mixing) * SVector{4}(thrust, τx, τy, τz)
@@ -198,7 +195,13 @@ function aerodynamics(w, params)
     T = kf .* w2                     # thrust per motor
     M = km .* w2 .* spin_dirs        # moment per motor
     F_z = sum(T)                      # scalar
-    τ = sum(cross.(motor_positions, @. SVector(0.0, 0.0, T)) .+ SVector.(0.0, 0.0, M))
+    τ = reduce(
+        +,
+        [
+            @SVector[P[2] * T[i], -P[1] * T[i], M[i]] for
+            (i, P) in enumerate(motor_positions)
+        ],
+    )
 
     return F_z, τ
 end
@@ -543,7 +546,7 @@ function quadcopter_simulation(inputs::NTuple{18, Any})
 end
 
 # --- Main execution ---
-function main()
+function run_example()
     run_dashboard(
         "Quadcopter Attitude Stabilizer",
         quadcopter_interfaces(),
@@ -553,5 +556,5 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    run_example()
 end

@@ -5,79 +5,92 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-
+  
 permissions:
   actions: write
   contents: read
 
 jobs:
-  setup:
-    name: Julia ${{ matrix.version }} setup
+  test-with-coverage:
+    name: Julia ${{ matrix.version }} ${{ matrix.os }} Test Suite
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         version: ['1.10', '1.11', '1.12.0-rc3']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Reusable Julia Environment Setup
-        # Calls the composite action located in .github/actions/julia-project-setup/
-        # This single step replaces Setup Julia, Cache, and Install Dependencies.
-        uses: ./.github/actions/julia-project-setup
+
+      - name: Check for changed Julia files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
         with:
-          julia-version: ${{ matrix.version }}
-   
-  test:
-    needs: setup
-    name: Julia ${{ matrix.version }} Test Suite
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        version: ['1.10', '1.11', '1.12.0-rc3']
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
+          files: |
+            src/**/*.jl
+            test/**/*.jl
+
+      - name: Set up Julia ${{ matrix.version }}
+        uses: julia-actions/setup-julia@v2
         with:
-          cache-name: julia_1.11_cache
+          version: ${{ matrix.version }}
+
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/packages
+            ~/.julia/environments/v${{ matrix.version }}
+          key: julia-cache-${{ matrix.os }}-${{ matrix.version }}-${{ hashFiles('Project.toml', 'Manifest.toml') }}
+          restore-keys: |
+            julia-cache-${{ matrix.os }}-${{ matrix.version }}-
+
+      - name: Install dependencies
+        shell: bash
+        run: | 
+          rm -f Manifest.toml 
+          julia --project=. -e 'using Pkg; Pkg.instantiate();'
+
       - name: Run Tests
+        if: ${{ steps.changed-files.outputs.any_changed }} == 'true'
         working-directory: ${{ github.workspace }}
         shell: bash
         run: | 
-          echo "Running tests for Julia 1.11 ..."
-          julia --project=. -e 'using Pkg; Pkg.test()'
-
-  code-coverage:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
-        with:
-          cache-name: julia_1.11_cache
-      - name: Build coverage artifacts
-        working-directory: ${{ github.workspace }}
-        run: |
+          echo "Running tests for Julia ${{ matrix.version }} ..."
           julia --project=. test/CodeCoverage.jl
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: "lcov.info"
-          fail_ci_if_error: false
 
   documentation:
-    needs: setup
+    name: Documentation
+    needs: test-with-coverage
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        version: ['1.11']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Cache dependencies
-        uses: julia-actions/cache@v1
+
+      - name: Cache Julia dependencies
+        uses: actions/cache@v4
         with:
-          cache-name: julia_1.11_cache
+          path: |
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/packages
+            ~/.julia/environments/v${{ matrix.version }}
+          key: julia-cache-${{ matrix.os }}-${{ matrix.version }}-${{ hashFiles('Project.toml', 'Manifest.toml') }}
+          restore-keys: |
+            julia-cache-${{ matrix.os }}-${{ matrix.version }}-
+
       - name: Build and deploy documentation
         working-directory: ${{ github.workspace }}
         env:

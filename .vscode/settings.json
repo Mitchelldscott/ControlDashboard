@@ -3,14 +3,21 @@
     "editor.defaultFormatter": "julialang.language-julia",
     "editor.formatOnSave": true
   },
+  "julia.executablePath": "/usr/local/bin/julia",         // e.g. "/Applications/Julia-1.10.app/Contents/Resources/julia/bin/julia" or output of `which julia`
+  // "julia.environmentPath": "${workspaceFolder}",   // use workspace root so the Language Server picks up Project.toml in the repo
+  "julia.lint.missingrefs": "all",
   "julia.lint.run": true,
   "julia.lint.call": true,
-  "julia.lint.missingrefs": "all",
   "julia.lint.iter": true,
   "julia.lint.constif": true,
   "julia.lint.disabledDirs": [
     "docs",
     "test",
-    "examples"
+    "examples",
+    "Manifest.toml",
+    "Project.toml",
+    ".git",
+    ".github",
+    ".gitignore"
   ],
 }

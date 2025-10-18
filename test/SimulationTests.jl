@@ -1,4 +1,5 @@
-using Test, Dash, ControlDashboard, DifferentialEquations, StaticArrays, DataFrames
+using Test, Dash, DifferentialEquations, StaticArrays, DataFrames
+using ControlDashboard.Simulation
 
 @testset "Simulation tests" begin
     @testset "ode_simulation tests" begin

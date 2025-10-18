@@ -1,6 +1,5 @@
-using Test
-using Dash
-using ControlDashboard
+using Test, Dash
+using ControlDashboard.ControlPanel
 
 @testset "ControlPanel tests" begin
     # --- Test 1: input & slider with defaults ---
