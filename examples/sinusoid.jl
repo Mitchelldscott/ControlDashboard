@@ -112,7 +112,6 @@ set_callbacks!(
 
 # --- Main execution block ---
 function main()
-    # Run the server
     # You can access the dashboard at http://127.0.0.1:8050
     run_server(sinusoid_app, "0.0.0.0", 8050)
 end
