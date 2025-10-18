@@ -1,6 +1,6 @@
 using Dash,
     PlotlyJS,
-    StaticArrays,
+    StaticArrays
 using ControlDashboard
 
 struct QuadcopterSimParameters
