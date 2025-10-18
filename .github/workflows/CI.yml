@@ -29,6 +29,7 @@ jobs:
           files: |
             src/**/*.jl
             test/**/*.jl
+
       - name: Set up Julia ${{ matrix.version }}
         uses: julia-actions/setup-julia@v2
         with:

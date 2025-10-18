@@ -71,48 +71,50 @@ sin_wave_interfaces = [
     ),
 ]
 
+# Create the app by passing our custom simulation functions to the dashboard wrapper
+sinusoid_control_panel = make_panel(
+    sin_wave_interfaces;
+    component_style = Dict(
+        "width" => "100%",        # Slider fills the available column
+        "margin" => "4px 0",      # Vertical spacing between label and slider
+        "display" => "block",
+    ),
+    label_style = Dict(
+        "width" => "100%",
+        "margin-bottom" => "4px",
+        "font-weight" => "bold",
+        "display" => "block",
+        "text-align" => "center", # Center the label text
+    ),
+    panel_style = Dict(
+        "width" => "100%",
+        "display" => "grid",
+        "grid-template-columns" => "1fr 1fr", # Two columns
+        "gap" => "16px",                        # Space between columns/rows
+        "align-items" => "stretch",             # Make children stretch full height
+        "padding" => "16px",
+    ),
+)
+
+sinusoid_app =
+    initialize_dashboard("Sinusoid Tuner"; control_panel = sinusoid_control_panel)
+set_callbacks!(
+    sinusoid_app,
+    run_sin_simulation,
+    Dict("main_view" => make_timeseries_figure),
+    [
+        ("amplitude", "value"),
+        ("frequency", "value"),
+        ("phase", "value"),
+        ("dt", "value"),
+    ],
+)
+
 # --- Main execution block ---
 function main()
-    # Create the app by passing our custom simulation functions to the dashboard wrapper
-    panel = make_panel(
-        sin_wave_interfaces;
-        component_style = Dict(
-            "width" => "100%",        # Slider fills the available column
-            "margin" => "4px 0",      # Vertical spacing between label and slider
-            "display" => "block",
-        ),
-        label_style = Dict(
-            "width" => "100%",
-            "margin-bottom" => "4px",
-            "font-weight" => "bold",
-            "display" => "block",
-            "text-align" => "center", # Center the label text
-        ),
-        panel_style = Dict(
-            "width" => "100%",
-            "display" => "grid",
-            "grid-template-columns" => "1fr 1fr", # Two columns
-            "gap" => "16px",                        # Space between columns/rows
-            "align-items" => "stretch",             # Make children stretch full height
-            "padding" => "16px",
-        ),
-    )
-    app = initialize_dashboard("Sinusoid Tuner"; control_panel = panel)
-    set_callbacks!(
-        app,
-        run_sin_simulation,
-        Dict("main_view" => make_timeseries_figure),
-        [
-            ("amplitude", "value"),
-            ("frequency", "value"),
-            ("phase", "value"),
-            ("dt", "value"),
-        ],
-    )
-
     # Run the server
     # You can access the dashboard at http://127.0.0.1:8050
-    run_server(app, "0.0.0.0", 8050)
+    run_server(sinusoid_app, "0.0.0.0", 8050)
 end
 
 # Run the main function
