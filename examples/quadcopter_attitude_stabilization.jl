@@ -1,7 +1,7 @@
 using Dash,
     PlotlyJS,
-    StaticArrays
-using ControlDashboard
+    StaticArrays,
+    ControlDashboard
 
 struct QuadcopterSimParameters
     t_final::Float64             # Length of the simulation [s]
@@ -150,13 +150,12 @@ function motor_mixing(thrust, τ_control, params)
     spin_dirs = params.spin_dirs
 
     # cross(P, [0,0,kf]) == (y*kf, -x*kf, km*si)
-    τ =
-        mixing = @SMatrix[
-            hcat([
-                @SVector[kf, Pi[2]*kf, -Pi[1]*kf, km * si] for
-                (Pi, si) in zip(P, spin_dirs)
-            ])...,
-        ]
+    mixing = @SMatrix[
+        hcat([
+            @SVector[kf, Pi[2]*kf, -Pi[1]*kf, km * si] for
+            (Pi, si) in zip(P, spin_dirs)
+        ])...,
+    ]
 
     # Solve for squared speeds
     ω_sq = pinv(mixing) * SVector{4}(thrust, τx, τy, τz)
